@@ -1,0 +1,3 @@
+-e git+https://github.com/jwlin/ptt-web-crawler.git@f8c04076004941d3f7584240c86a95a883ae16de#egg=PttWebCrawler
+selenium==3.141.0
+SQLAlchemy==1.2.14

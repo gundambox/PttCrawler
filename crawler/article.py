@@ -2,6 +2,7 @@ import argparse
 import codecs
 import json
 import re
+import sys
 import time
 from datetime import datetime
 from typing import Dict, List
@@ -9,8 +10,8 @@ from typing import Dict, List
 import requests
 from bs4 import BeautifulSoup
 
-from models import (Article, ArticleHistory, Board, PttDatabase, Push, User,
-                    UserLastRecord)
+from models import (Article, ArticleHistory, Board, IpAsn, PttDatabase, Push,
+                    User, UserLastRecord)
 from PttWebCrawler.crawler import PttWebCrawler
 from utils import load_config
 
@@ -108,10 +109,15 @@ class PttArticleCrawler(PttWebCrawler):
                                                                  'post_datetime': datetime.strptime(record['date'],
                                                                                                     '%a %b %d %H:%M:%S %Y'),
                                                                  'post_ip': record['ip']})
+                aritcle_ipasn, _ = self.db.get_or_create(self.db_session,
+                                                         IpAsn,
+                                                         {'ip': record['ip']},
+                                                         {'ip': record['ip']})
+
                 # 1. 新文章
                 # 2. 舊文章發生修改
                 # => 新增歷史記錄
-                if is_new_article or article.histroy[0].content != record['content']:
+                if is_new_article or article.history[0].content != record['content']:
                     history = self.db.create(self.db_session, ArticleHistory,
                                              {'article_id': article.id,
                                               'title': record['article_title'],
@@ -123,7 +129,7 @@ class PttArticleCrawler(PttWebCrawler):
                             'article_history_id': history.id})
                 # 舊文章
                 else:
-                    history = article.histroy[0]
+                    history = article.history[0]
 
                 # 更新到最近的文章歷史記錄推文
                 push_list = []
@@ -146,6 +152,10 @@ class PttArticleCrawler(PttWebCrawler):
                                           push_content=message['push_content'],
                                           push_ip=push_ip,
                                           push_datetime=push_datetime))
+                    push_ipasn, _ = self.db.get_or_create(self.db_session,
+                                                          IpAsn,
+                                                          {'ip': push_ip},
+                                                          {'ip': push_ip})
 
                 self.db.bulk_insert(self.db_session, push_list)
             except Exception as e:

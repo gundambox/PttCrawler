@@ -10,9 +10,13 @@ from typing import Dict, List
 from selenium.webdriver import Chrome, ChromeOptions
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
-
-from models import PttDatabase, User, UserLastRecord
+from selenium.common.exceptions import WebDriverException
+from models import IpAsn, PttDatabase, User, UserLastRecord
 from utils import load_config
+
+
+class PttDisconnectException(WebDriverException):
+    pass
 
 
 class PttBrowser(object):
@@ -45,12 +49,22 @@ class PttBrowser(object):
             send_keys(Keys.ENTER). \
             perform()
         time.sleep(self.ACT_DELAY_TIME)
+        if self._is_lose_connect():
+            raise PttDisconnectException()
         return self
 
     def get_buffer(self) -> str:
         main_div = self.browser.find_element_by_xpath(
             "//div[@id='mainContainer']")
         return main_div.text
+
+    def _is_lose_connect(self) -> bool:
+        alert_div = self.browser.find_element_by_xpath(
+            "//div[@id='reactAlert']")
+        if alert_div and u'你斷線了' in alert_div.text:
+            return True
+        else:
+            return False
 
 
 class PttUserCrawler(object):
@@ -107,6 +121,12 @@ class PttUserCrawler(object):
         self._init_database()
         self._init_browser()
 
+    def _get_id_list(self, arguments: Dict[str, str]) -> List[str]:
+        if arguments.get('id'):
+            return arguments.get('id').split(',')
+        else:
+            return list(map(lambda user: user.username, self.db.get_list(self.db_session, User, {})))
+
     def _output_json(self, result: Dict[str, object], json_prefix):
         current_time_str = datetime.datetime.now().strftime('%Y-%m-%d_result')
         json_path = '{prefix}{time}.json'.format(prefix=json_prefix,
@@ -128,21 +148,16 @@ class PttUserCrawler(object):
                 user.valid_article_count = int(record['valid_article_count'])
                 self.db_session.commit()
 
-            # user = self.db_session.query(User).filter_by(
-            #     username=record['username']).first()
-
-            # if not user:
-            #     user = User(username=record['username'],
-            #                 login_times=int(record['login_times']),
-            #                 valid_article_count=int(record['valid_article_count']))
-            #     self.db_session.add(user)
-            #     self.db_session.commit()
-
             last_login_datetime = datetime.datetime.strptime(record['last_login_datetime'],
                                                              '%m/%d/%Y %H:%M:%S %a')
             last_record = UserLastRecord(last_login_datetime=last_login_datetime,
                                          last_login_ip=record['last_login_ip'])
             last_record.user_id = user.id
+
+            ipasn, is_new_ip = self.db.get_or_create(self.db_session,
+                                                     IpAsn,
+                                                     {'ip': record['last_login_ip']},
+                                                     {'ip': record['last_login_ip']})
 
             self.db_session.add(last_record)
             self.db_session.commit()
@@ -154,6 +169,18 @@ class PttUserCrawler(object):
         if self.database_output:
             self._output_database(result)
 
+    def _login_ptt(self, browser, userid, userpwd):
+        browser.connect(self.PTT_WEB_URL)
+        # Ptt login
+        browser.send_keys(userid)
+        browser.send_keys(userpwd)
+
+        # 踢掉重複登入 或 刪除密碼嘗試錯誤記錄
+        buffer = browser.get_buffer()
+        while u"主功能表" not in buffer:
+            browser.send_keys('')
+            buffer = browser.get_buffer()
+
     def go(self, arguments: Dict[str, str]):
         self._init_crawler(arguments)
 
@@ -161,8 +188,7 @@ class PttUserCrawler(object):
         userid = self.config['PttUser']['UserId']
         userpwd = self.config['PttUser']['UserPwd']
 
-        id_list = (arguments.get('id').split(',')
-                   if arguments.get('id') else [])
+        id_list = self._get_id_list(arguments)
 
         crawler_result = []
 
@@ -170,52 +196,61 @@ class PttUserCrawler(object):
 
             browser.ACT_DELAY_TIME = delaytime
 
-            browser.connect(self.PTT_WEB_URL)
-
-            # Ptt login
-            browser.send_keys(userid)
-            browser.send_keys(userpwd)
-
-            # 踢掉重複登入 或 刪除密碼嘗試錯誤記錄
-            buffer = browser.get_buffer()
-            while u"主功能表" not in buffer:
-                browser.send_keys('')
-                buffer = browser.get_buffer()
+            self._login_ptt(browser, userid, userpwd)
 
             # 轉到 Talk -> Query
             browser.send_keys('T')
 
-            for user_id in id_list:
-                browser.send_keys('Q').send_keys(user_id)
-                buffer = browser.get_buffer()
+            id_queue = id_list.copy()
+            while len(id_queue) > 0:
+                for user_id in id_list:
+                    try:
+                        browser.send_keys('Q').send_keys(user_id)
+                        buffer = browser.get_buffer()
 
-                pattern = r"[\w\W]*《登入次數》(\d*)\D*次\D*《有效文章》\D*(\d*)[\w\W]*《上次上站》\D*([\d]{1,2}\/[\d]{1,2}\/[\d]{4}\W*[\d]{1,2}:\W*[\d]{1,2}:\W*[\d]{1,2}\W*\w*)\D*《上次故鄉》([\d.]*)"
-                pat = re.compile(pattern)
-                search_result = pat.match(buffer)
+                        pattern = r"[\w\W]*《登入次數》(\d*)\D*次\D*《有效文章》\D*(\d*)[\w\W]*《上次上站》\D*([\d]{1,2}\/[\d]{1,2}\/[\d]{4}\W*[\d]{1,2}:\W*[\d]{1,2}:\W*[\d]{1,2}\W*\w*)\D*《上次故鄉》([\d.]*)"
+                        pat = re.compile(pattern)
+                        search_result = pat.match(buffer)
 
-                login_times = search_result.group(1)
-                valid_article_count = search_result.group(2)
-                last_login_datetime = search_result.group(3)
-                last_login_ip = search_result.group(4)
+                        if search_result:
+                            login_times = search_result.group(1)
+                            valid_article_count = search_result.group(2)
+                            last_login_datetime = search_result.group(3)
+                            last_login_ip = search_result.group(4)
 
-                crawler_result.append({'username': user_id,
-                                       'login_times': login_times,
-                                       'valid_article_count': valid_article_count,
-                                       'last_login_datetime': last_login_datetime,
-                                       'last_login_ip': last_login_ip})
+                            crawler_result.append({'username': user_id,
+                                                   'login_times': login_times,
+                                                   'valid_article_count': valid_article_count,
+                                                   'last_login_datetime': last_login_datetime,
+                                                   'last_login_ip': last_login_ip})
 
-                browser.send_keys('')
+                            if len(crawler_result) % 100 == 0:
+                                self._output(crawler_result, arguments)
+                                crawler_result = []
+                        else:
+                            print('User \'{user_id}\' has error'.format(
+                                user_id=user_id))
 
-        self._output(crawler_result, arguments)
+                        browser.send_keys('')
+                        id_queue.remove(user_id)
+
+                    except PttDisconnectException:
+                        browser.send_keys('')
+                        self._login_ptt(browser, userid, userpwd)
+                        browser.send_keys('T')
+                        continue
+
+                self._output(crawler_result, arguments)
 
 
 def parse_args() -> Dict[str, str]:
     parser = argparse.ArgumentParser()
 
     # user id input
-    parser.add_argument('--id',
-                        type=str,
-                        required=True)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--id',
+                       type=str)
+    group.add_argument('--database', action='store_true')
 
     # Config path
     parser.add_argument('--config-path',

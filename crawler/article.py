@@ -1,6 +1,7 @@
 import argparse
 import codecs
 import json
+import logging
 import re
 import sys
 import time
@@ -13,7 +14,7 @@ from bs4 import BeautifulSoup
 from models import (Article, ArticleHistory, Board, IpAsn, PttDatabase, Push,
                     User, UserLastRecord)
 from PttWebCrawler.crawler import PttWebCrawler
-from utils import load_config
+from utils import load_config, log
 
 
 class PttArticleCrawler(PttWebCrawler):
@@ -24,6 +25,7 @@ class PttArticleCrawler(PttWebCrawler):
     NEXT_PAGE_DELAY_TIME = 5.0
 
     def __init__(self):
+        logging.info('PttArticleCrawler Initialize.')
         super().__init__(as_lib=True)
 
     def _init_config(self, config_path: str):
@@ -66,8 +68,8 @@ class PttArticleCrawler(PttWebCrawler):
             json.dump(result, jsonfile, sort_keys=True,
                       indent=4, ensure_ascii=False)
 
+    @log
     def _output_database(self, result: List[Dict[str, object]]):
-
         def parser_push_ipdatetime(push_ipdatetime):
             match = re.search(
                 r'([\d.]*)\W?(\d{2}\/\d{2}\ \d{2}:\d{2})', push_ipdatetime)
@@ -88,79 +90,77 @@ class PttArticleCrawler(PttWebCrawler):
                 return None
 
         for record in result:
-            try:
-                author_username = parse_author(record['author'])
-                author_conditon = {'username': author_username}
-                author_values = {'username': author_username,
-                                 'login_times': 0,
-                                 'valid_article_count': 0}
-                user, is_new_user = self.db.get_or_create(self.db_session,
-                                                          User,
-                                                          author_conditon,
-                                                          author_values)
-                board, is_new_board = self.db.get_or_create(self.db_session, Board,
-                                                            {'name': record['board']},
-                                                            {'name': record['board']})
-                article, is_new_article = self.db.get_or_create(self.db_session, Article,
-                                                                {'web_id': record['article_id']},
-                                                                {'web_id': record['article_id'],
-                                                                 'user_id': user.id,
-                                                                 'board_id': board.id,
-                                                                 'post_datetime': datetime.strptime(record['date'],
-                                                                                                    '%a %b %d %H:%M:%S %Y'),
-                                                                 'post_ip': record['ip']})
-                aritcle_ipasn, _ = self.db.get_or_create(self.db_session,
-                                                         IpAsn,
-                                                         {'ip': record['ip']},
-                                                         {'ip': record['ip']})
+            author_username = parse_author(record['author'])
+            author_conditon = {'username': author_username}
+            author_values = {'username': author_username,
+                             'login_times': 0,
+                             'valid_article_count': 0}
+            user, is_new_user = self.db.get_or_create(self.db_session,
+                                                      User,
+                                                      author_conditon,
+                                                      author_values)
+            board, is_new_board = self.db.get_or_create(self.db_session, Board,
+                                                        {'name': record['board']},
+                                                        {'name': record['board']})
+            article, is_new_article = self.db.get_or_create(self.db_session, Article,
+                                                            {'web_id': record['article_id']},
+                                                            {'web_id': record['article_id'],
+                                                                'user_id': user.id,
+                                                                'board_id': board.id,
+                                                                'post_datetime': datetime.strptime(record['date'],
+                                                                                                   '%a %b %d %H:%M:%S %Y'),
+                                                                'post_ip': record['ip']})
+            aritcle_ipasn, _ = self.db.get_or_create(self.db_session,
+                                                     IpAsn,
+                                                     {'ip': record['ip']},
+                                                     {'ip': record['ip']})
 
-                # 1. 新文章
-                # 2. 舊文章發生修改
-                # => 新增歷史記錄
-                if is_new_article or article.history[0].content != record['content']:
-                    history = self.db.create(self.db_session, ArticleHistory,
-                                             {'article_id': article.id,
-                                              'title': record['article_title'],
-                                              'content': record['content'],
-                                              'start_at': datetime.now(),
-                                              'end_at': datetime.now()})
-                    if not is_new_article:
-                        self.db.delete(self.db_session, Push, {
-                            'article_history_id': history.id})
-                # 舊文章
-                else:
-                    history = article.history[0]
+            # 1. 新文章
+            # 2. 舊文章發生修改
+            # => 新增歷史記錄
+            if is_new_article or article.history[0].content != record['content']:
+                history = self.db.create(self.db_session, ArticleHistory,
+                                         {'article_id': article.id,
+                                             'title': record['article_title'],
+                                             'content': record['content'],
+                                             'start_at': datetime.now(),
+                                             'end_at': datetime.now()})
+                if not is_new_article:
+                    self.db.delete(self.db_session, Push, {
+                        'article_history_id': history.id})
+            # 舊文章
+            else:
+                history = article.history[0]
 
-                # 更新到最近的文章歷史記錄推文
-                push_list = []
-                for (floor, message) in enumerate(record['messages']):
-                    push_user_condition = {'username': message['push_userid']}
-                    push_user_values = {'username': message['push_userid'],
-                                        'login_times': None,
-                                        'valid_article_count': None}
-                    push_user, is_new_push_user = self.db.get_or_create(self.db_session,
-                                                                        User,
-                                                                        push_user_condition,
-                                                                        push_user_values)
-                    push_ip, push_datetime = parser_push_ipdatetime(
-                        message['push_ipdatetime'])
+            # 更新到最近的文章歷史記錄推文
+            push_list = []
+            for (floor, message) in enumerate(record['messages']):
+                push_user_condition = {'username': message['push_userid']}
+                push_user_values = {'username': message['push_userid'],
+                                    'login_times': None,
+                                    'valid_article_count': None}
+                push_user, is_new_push_user = self.db.get_or_create(self.db_session,
+                                                                    User,
+                                                                    push_user_condition,
+                                                                    push_user_values)
+                push_ip, push_datetime = parser_push_ipdatetime(
+                    message['push_ipdatetime'])
 
-                    push_list.append(Push(article_history_id=history.id,
-                                          floor=(floor+1),
-                                          push_tag=message['push_tag'],
-                                          push_user_id=push_user.id,
-                                          push_content=message['push_content'],
-                                          push_ip=push_ip,
-                                          push_datetime=push_datetime))
-                    push_ipasn, _ = self.db.get_or_create(self.db_session,
-                                                          IpAsn,
-                                                          {'ip': push_ip},
-                                                          {'ip': push_ip})
+                push_list.append(Push(article_history_id=history.id,
+                                      floor=(floor+1),
+                                      push_tag=message['push_tag'],
+                                      push_user_id=push_user.id,
+                                      push_content=message['push_content'],
+                                      push_ip=push_ip,
+                                      push_datetime=push_datetime))
+                push_ipasn, _ = self.db.get_or_create(self.db_session,
+                                                      IpAsn,
+                                                      {'ip': push_ip},
+                                                      {'ip': push_ip})
 
-                self.db.bulk_insert(self.db_session, push_list)
-            except Exception as e:
-                raise e
+            self.db.bulk_insert(self.db_session, push_list)
 
+    @log
     def go(self, arguments: Dict[str, str]):
         self._init_crawler(arguments)
 
@@ -180,6 +180,8 @@ class PttArticleCrawler(PttWebCrawler):
         self.NEXT_PAGE_DELAY_TIME = float(
             self.config['PttArticle']['NextPageDelaytime'])
         while last_page >= start_index:
+            logging.info('Processing index: %d', last_page)
+
             resp = requests.get(
                 url=(self.PTT_URL +
                      self.PTT_Board_Format).format(board=board, index=last_page),
@@ -187,37 +189,52 @@ class PttArticleCrawler(PttWebCrawler):
                 timeout=timeout
             )
             if resp.status_code != 200:
-                raise RuntimeError('invalid url: {url}'.format(url=resp.url))
+                raise RuntimeError(
+                    'invalid url: {url}'.format(url=resp.url))
 
             soup = BeautifulSoup(resp.text, 'html.parser')
-            divs = soup.find_all("div", "r-ent")
+            divs = soup.find(
+                "div", "r-list-container action-bar-margin bbs-screen")
+            children = divs.findChildren("div", recursive=False)
 
             article_list = []
 
-            for div in divs:
+            for div in children:
                 try:
                     # ex. link would be <a href="/bbs/PublicServan/M.1127742013.A.240.html">Re: [問題] 職等</a>
-                    href = div.find('a')['href']
-                    link = self.PTT_URL + href
-                    article_id = re.sub('\.html', '', href.split('/')[-1])
-                    article_list.append(json.loads(
-                        self.parse(link, article_id, board)))
-                    time.sleep(self.DELAY_TIME)
+                    if 'r-list-sep' in div['class']:
+                        break
+                    elif 'r-ent' in div['class']:
+                        href = div.find('a')['href']
+                        link = self.PTT_URL + href
+                        article_id = re.sub(
+                            '\.html', '', href.split('/')[-1])
+
+                        logging.info('Processing article: %s', article_id)
+
+                        article_list.append(json.loads(
+                            self.parse(link, article_id, board)))
+                        time.sleep(self.DELAY_TIME)
+                    else:
+                        continue
                 except:
                     pass
 
             if start_date:
-                tmp_article_list = list(filter(lambda article: start_date < datetime.strptime(article['date'],
-                                                                                              '%a %b %d %H:%M:%S %Y'),
-                                               article_list))
-
+                tmp_article_list = []
+                for article in article_list:
+                    try:
+                        aritcle_date = datetime.strptime(article['date'],
+                                                         '%a %b %d %H:%M:%S %Y')
+                        if start_date <= aritcle_date:
+                            tmp_article_list.append(article)
+                    except Exception as e:
+                        logging.error('%s', e)
+                        logging.error('article: %s , date format: %s',
+                                      article['article_id'], article['date'])
                 if len(tmp_article_list) < len(article_list):
-                    if last_page == end_index:
-                        # 考慮到置底文章，沒事兒
-                        pass
-                    else:
-                        start_index = last_page
-                        article_list = tmp_article_list
+                    start_index = last_page
+                    article_list = tmp_article_list
 
             if self.database_output:
                 self._output_database(article_list)
@@ -234,7 +251,7 @@ def parse_args() -> Dict[str, str]:
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--board-name',
-                        type=str,
+                        type=str.lower,
                         required=True)
 
     group = parser.add_mutually_exclusive_group(required=True)

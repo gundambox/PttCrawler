@@ -7,12 +7,13 @@ import sys
 import time
 from typing import Dict, List
 
+from selenium.common.exceptions import WebDriverException
 from selenium.webdriver import Chrome, ChromeOptions
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
-from selenium.common.exceptions import WebDriverException
+
 from models import IpAsn, PttDatabase, User, UserLastRecord
-from utils import load_config
+from utils import load_config, log
 
 
 class PttDisconnectException(WebDriverException):
@@ -109,7 +110,7 @@ class PttUserCrawler(object):
                                            platform,
                                            exe_filename)
         self.chrome_options = ChromeOptions()
-        # self.chrome_options.add_argument('--headless')
+        self.chrome_options.add_argument('--headless')
 
     def _init_crawler(self, arguments: Dict[str, str]):
 
@@ -134,6 +135,7 @@ class PttUserCrawler(object):
         with open(json_path, 'w') as jsonfile:
             json.dump(result, jsonfile, sort_keys=True, indent=4)
 
+    @log
     def _output_database(self, result: List[Dict[str, object]]):
         for record in result:
 
@@ -181,6 +183,7 @@ class PttUserCrawler(object):
             browser.send_keys('')
             buffer = browser.get_buffer()
 
+    @log
     def go(self, arguments: Dict[str, str]):
         self._init_crawler(arguments)
 

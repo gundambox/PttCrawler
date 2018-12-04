@@ -1,5 +1,11 @@
-from .user import PttUserCrawler
-from .asn import PttIpAsnCrawler
+from enum import Enum
+
 from .article import PttArticleCrawler
-import sys
-sys.path.append('..')
+from .asn import PttIpAsnCrawler
+from .user import PttUserCrawler
+
+
+class CrawlerModule(Enum):
+    article = 1
+    asn = 2
+    user = 3

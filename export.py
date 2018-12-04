@@ -1,3 +1,4 @@
+import argparse
 import csv
 import os
 from collections import OrderedDict
@@ -142,3 +143,41 @@ class PttExportHelper(object):
             self._export_csv()
         else:
             raise ValueError('File format error.')
+
+
+def parse_argument():
+
+    base_subparser = argparse.ArgumentParser(add_help=False)
+    base_subparser.add_argument('--verbose',
+                                action='store_true',
+                                help='Show more debug messages.')
+    base_subparser.add_argument('--config-path',
+                                type=str,
+                                default='',
+                                help='Config ini file path.')
+
+    parser = argparse.ArgumentParser(parents=[base_subparser])
+
+    output_group = parser.add_mutually_exclusive_group(required=True)
+    output_group.add_argument('--format',
+                              type=str,
+                              choices=['ods', 'csv'])
+    parser.add_argument('--output-folder',
+                        type=str,
+                        required=True)
+    parser.add_argument('--output-prefix',
+                        type=str,
+                        default='')
+    args = parser.parse_args()
+    arguments = vars(args)
+    return arguments
+
+
+def main():
+    args = parse_argument()
+    helper = PttExportHelper()
+    helper.go(args)
+
+
+if __name__ == "__main__":
+    main()

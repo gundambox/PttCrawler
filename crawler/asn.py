@@ -1,13 +1,12 @@
 import argparse
 from datetime import datetime
-from pprint import pprint
 from typing import Dict, List
 
 from ipwhois.asn import IPASN
 from ipwhois.net import Net
 
 from models import IpAsn, PttDatabase
-from utils import load_config
+from utils import load_config, log
 
 
 class PttIpAsnCrawler(object):
@@ -31,15 +30,16 @@ class PttIpAsnCrawler(object):
         if self.db_input:
             ip_list = list(map(lambda ipasn: str(ipasn.ip),
                                self.db.get_list(self.db_session, IpAsn, {})))
-            print(ip_list)
         else:
             ip_list = arguments['ip_list'].split(',')
 
         return ip_list
 
+    @log
     def _output_db(self, result: List[Dict[str, str]]):
         self.db.bulk_update(self.db_session, IpAsn, result)
 
+    @log
     def go(self, arguments: Dict[str, str]):
         self._init_crawler(arguments)
         ip_list = self._get_ip_list(arguments)
@@ -67,8 +67,7 @@ def parse_args() -> Dict[str, str]:
     input_group = parser.add_mutually_exclusive_group(required=True)
     input_group.add_argument('--ip-list',
                              type=str)
-    input_group.add_argument('--database',
-                             type=str)
+    input_group.add_argument('--database', action='store_true')
 
     # Config path
     parser.add_argument('--config-path',

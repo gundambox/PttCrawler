@@ -11,7 +11,7 @@ from sqlalchemy import func
 
 from models import (Article, ArticleHistory, Board, IpAsn, PttDatabase, Push,
                     User, UserLastRecord)
-from utils import load_config
+from utils import load_config, log
 
 
 class ExportFormat(Enum):
@@ -36,6 +36,7 @@ class PttExportHelper(object):
                               dbname=self.config['Database']['Name'])
         self.db_session = self.db.get_session()
 
+    @log
     def _get_export_rows(self):
         article_rows = [['Atricle.web_id', 'Article.board', 'Atricle.author', 'Atricle.title', 'Atricle.cotent',
                          'Atricle.post_ip', 'Atricle.post_ip.asn', 'Atricle.post_ip.asn_date', 'Atricle.post_ip.asn_registry',
@@ -110,6 +111,7 @@ class PttExportHelper(object):
 
         return data
 
+    @log
     def _export_csv(self):
         data = self._get_export_rows()
 
@@ -124,6 +126,7 @@ class PttExportHelper(object):
                 for row in rows:
                     csvwriter.writerow(row)
 
+    @log
     def _export_ods(self):
         output_filename = 'Ptt_report_{export_datetime}'.format(
             export_datetime=datetime.now().strftime('%Y-%m-%d'))
@@ -134,6 +137,7 @@ class PttExportHelper(object):
         data = self._get_export_rows()
         save_data(output_path, data)
 
+    @log
     def go(self, arguments: Dict[str, str]):
         self._init_helper(arguments)
 

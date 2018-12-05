@@ -2,6 +2,5 @@
 selenium==3.141.0
 SQLAlchemy==1.2.14
 ipwhois==1.0.0
-alembic==1.0.3
 pyexcel-ods==0.5.3
 python-crontab==2.3.5

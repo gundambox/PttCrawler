@@ -63,19 +63,28 @@ class ScheduleHelper(object):
                        else 'config.ini')
 
         self.config = load_config(config_path)
-        self.tab_filename = self.config['Schedule']['TabFilename']
 
     def go(self, arguments: Dict):
         self._init_config(arguments)
         action = ScheduleAction.from_string(arguments['action'])
 
         if self.platform == Platform.linux:
-            cron = CronTab(user='gundam')
+            cron = CronTab(user=True)
             cron.env['PATH'] = os.environ['PATH'] + ':' + os.getcwd()
             crawler_module = arguments['crawler_module']
+            is_venv = arguments['virtualenv']
             jobs = list(cron.find_command(str(crawler_module)))
-            module_command = '~/PTTWorkspace/PttCrawler/virt_env_wrapper.sh -m crawler {module} --database >/dev/null 2>&1'.format(
+
+            cwd = os.getcwd()
+            wrapper_path = os.path.join(cwd, 'env_wrapper.sh')
+
+            module_command = '{wrapper_path} "{cwd}" "{env}" -m crawler {module} --database >/dev/null 2>&1'.format(
+                wrapper_path=wrapper_path,
+                cwd=cwd,
+                env=is_venv,
                 module=crawler_module)
+            print(module_command)
+            return
             if len(jobs) > 0:
                 job = jobs[0]
                 job.set_command(module_command)
@@ -109,6 +118,9 @@ def parse_argument():
     base_subparser.add_argument('--config-path',
                                 type=str,
                                 help='Config ini file path.')
+    base_subparser.add_argument('--virtualenv',
+                                type=str,
+                                default='')
 
     parser = argparse.ArgumentParser(parents=[base_subparser])
 

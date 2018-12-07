@@ -8,13 +8,13 @@ pip install -r requirements.txt
 
 ## Configuration
 
-1. 複製config_example.ini
+1. 複製`config_example.ini`為`config.ini`
 
 ```bash
 cp config_example.ini config.ini
 ```
 
-2. ini設定
+2. `config.ini`
 
 ```ini
 [Database]
@@ -25,7 +25,7 @@ Name = ptt.db
 
 [PttUser]
 # term.ptt.cc 每個動作的間隔
-Delaytime = 0.8
+Delaytime = 2
 # selenium 需要用到的webdriver的資料夾
 WebdriverFolder = webdriver
 # term.ptt.cc 的 登入帳號密碼
@@ -39,6 +39,7 @@ Output = both
 # NextPageDelaytime 是WebPtt索引頁之間的Delaytime
 Delaytime = 1.0
 NextPageDelaytime = 10.0
+# request timeout
 Timeout = 10
 # Choices = {database, json, both}
 Output = both
@@ -82,8 +83,6 @@ python export.py --format {ods, csv} --output-folder OUTPUT_FOLDER [--output-pre
 
 ### Schedule
 
-將crawler加入系統排程
-
 1. Update
 
 ```bash
@@ -96,9 +95,14 @@ python schedule.py update {article, asn, user} -c CYCLE_TIME [-s START_DATETIME]
 python schedule.py remove {article, asn, user}
 ```
 
+## Todo
+
+- [ ] PttArticleCrawler改用`Scrapy`框架
+- [ ] PttArticleCrawler的`crawling`方法要分為兩個，一個負責抓取`index`跟`web_id`，一個負責抓取與`web_id`對應的文章
+
 ## 檔案結構
 
-```text
+```
 PttCrawler/
 |- utils.py
 |- export.py
@@ -107,14 +111,16 @@ PttCrawler/
 |- config_example.ini
 |- models/
 |   |- __init__.py
-|   |- base.py
 |   |- article.py
 |   |- asn.py
+|   |- base.py
 |   `- user.py
 |- crawler/
 |   |- __init__.py
+|   |- __main__.py
 |   |- article.py
 |   |- asn.py
+|   |- crawler_arg.py
 |   |- user.py
 |- webdriver/
 |   |- windows/
@@ -124,8 +130,8 @@ PttCrawler/
 |   `- mac/
 |       `- chromedriver
 |- requirements.txt
+|- env_wrapper.sh
 |- CHANGELOG.md
 |- README.md
 `- README_ZH.md
-
 ```

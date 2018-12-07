@@ -64,14 +64,14 @@ class PttExportHelper(object):
             article_ip_asn = self.db_session.query(
                 IpAsn).filter_by(ip=article.post_ip).first()
             if article_ip_asn:
-                article_row += [article_ip_asn.ip, article_ip_asn.asn, str(article_ip_asn.asn_date),
-                                article_ip_asn.asn_registry, article_ip_asn.asn_cidr, article_ip_asn.asn_country_code,
-                                article_ip_asn.asn_description]
+                article_row += [article_ip_asn.ip, article_ip_asn.asn or '', str(article_ip_asn.asn_date or ''),
+                                article_ip_asn.asn_registry or '', article_ip_asn.asn_cidr or '', article_ip_asn.asn_country_code or '',
+                                article_ip_asn.asn_description or '']
             else:
                 article_row += [article.post_ip, '', '', '', '', '', '']
 
-            article_row += [str(article.post_datetime),
-                            str(last_history.end_at)]
+            article_row += [str(article.post_datetime or ''),
+                            str(last_history.end_at or '')]
 
             article_rows.append(article_row)
 
@@ -97,8 +97,8 @@ class PttExportHelper(object):
                 user_last_record = user.last_record[0]
                 user_ip_asn = self.db_session.query(IpAsn).filter_by(
                     ip=user_last_record.last_login_ip).first()
-                user_row += [user.username, user.login_times, user.valid_article_count,
-                             str(user_last_record.last_login_datetime), user_last_record.last_login_ip]
+                user_row += [user.username, user.login_times or '', user.valid_article_count or '',
+                             str(user_last_record.last_login_datetime or ''), user_last_record.last_login_ip or '']
                 user_row += [user_ip_asn.asn or '', str(user_ip_asn.asn_date or ''),
                              user_ip_asn.asn_registry or '', user_ip_asn.asn_cidr or '', user_ip_asn.asn_country_code or '',
                              user_ip_asn.asn_description or '']

@@ -97,7 +97,7 @@ class QueryHelper(object):
         article_not_tw_ip = sum(1 for _, _, tw_ip in article_res
                                 if tw_ip == False)
         rows.append(['Article', self.board_name,
-                     self.start_date, self.end_date, article_tw_ip, article_not_tw_ip])
+                     str(self.start_date or ''), str(self.end_date or ''), article_tw_ip or '0', article_not_tw_ip or '0'])
 
         article_history_id_list = []
         for res in article_res:
@@ -113,23 +113,37 @@ class QueryHelper(object):
         push_not_tw_ip = sum(1 for _,  tw_ip in push_res
                              if tw_ip == False)
         rows.append(['Push', self.board_name,
-                     self.start_date, self.end_date, push_tw_ip, push_not_tw_ip])
+                     str(self.start_date or ''), str(self.end_date or ''), push_tw_ip or '0', push_not_tw_ip or '0'])
 
         return rows
 
     def _print_rows(self):
         data = self._get_export_rows()
         for idx, row in enumerate(data):
-            print('{:16} | {:16} | {:32} | {:32} | {:8} | {:8}'.format(
+            print('{:8} | {:16} | {:20} | {:20} | {:5} | {:8}'.format(
                 *map(str, row)))
             if idx == 0:
-                print('-----------------+------------------+----------------------------------+----------------------------------+----------+----------')
+                print(
+                    '---------+------------------+----------------------+----------------------+-------+----------')
 
     def _export_ods(self):
-        data = self._get_export_rows()
+        data = {'Query': self._get_export_rows()}
+        output_filename = 'Ptt_query_{export_datetime}'.format(
+            export_datetime=datetime.now().strftime('%Y-%m-%d'))
+        output_path = os.path.join(
+            self.output_folder, '{filename}.ods'.format(filename=output_filename))
+        save_data(output_path, data)
 
     def _export_csv(self):
         data = self._get_export_rows()
+        output_filename = 'Ptt_query_{export_datetime}'.format(
+            export_datetime=datetime.now().strftime('%Y-%m-%d'))
+        csv_path = os.path.join(
+            self.output_folder, '{filename}.csv'.format(filename=output_filename))
+        with open(csv_path, 'w') as csvfile:
+            csvwriter = csv.writer(csvfile, delimiter=',')
+            for row in data:
+                csvwriter.writerow(row)
 
     def go(self):
         if self.file_format == 'console':

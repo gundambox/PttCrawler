@@ -4,8 +4,10 @@ crawler/config.ini
 database/
 *.json
 .vscode/
-*.db
+*.db*
 *.ods
 *.csv
 *.ini
-*.log
+*.log*
+*.png
+*.pyc

@@ -2,6 +2,7 @@ import argparse
 import codecs
 import json
 import logging
+import os
 import re
 import sys
 import time
@@ -16,6 +17,8 @@ from models import (Article, ArticleHistory, Board, IpAsn, PttDatabase, Push,
 from PttWebCrawler.crawler import PttWebCrawler
 from utils import load_config, log
 
+from .crawler_arg import add_article_arg_parser, get_base_parser
+
 
 class PttArticleCrawler(PttWebCrawler):
 
@@ -24,51 +27,70 @@ class PttArticleCrawler(PttWebCrawler):
     DELAY_TIME = 1.0
     NEXT_PAGE_DELAY_TIME = 5.0
 
-    def __init__(self):
-        logging.info('PttArticleCrawler Initialize.')
+    @log('Initialize')
+    def __init__(self, arguments: Dict):
+
         super().__init__(as_lib=True)
 
-    def _init_config(self, config_path: str):
-        self.config = load_config(config_path)
-
-        if self.config['PttArticle']['Output'] == 'both':
-            self.json_output = True
-            self.database_output = True
-        elif self.config['PttArticle']['Output'] == 'database':
-            self.json_output = False
-            self.database_output = True
-        elif self.config['PttArticle']['Output'] == 'json':
-            self.json_output = True
-            self.database_output = False
-        else:
-            self.json_output = False
-            self.database_output = False
-
-    def _init_database(self):
-        self.db = PttDatabase(dbtype=self.config['Database']['Type'],
-                              dbname=self.config['Database']['Name'])
-        self.db_session = self.db.get_session()
-
-    def _init_crawler(self, arguments: Dict[str, str]):
-        config_path = (arguments['config_path']
-                       if arguments['config_path']
-                       else 'config.ini')
+        config_path = (arguments['config_path'] or 'config.ini')
 
         self._init_config(config_path)
         self._init_database()
 
-    def _output_json(self, result: Dict[str, object], json_prefix, board, index):
-        current_time_str = datetime.now().strftime('%Y-%m-%d_result')
-        json_path = '{prefix}{board}_{index}_{time}.json'.format(prefix=json_prefix,
-                                                                 board=board,
-                                                                 index=index,
-                                                                 time=current_time_str)
+        self.board = arguments['board_name']
+        self.timeout = float(self.article_config['Timeout'])
 
+        self.start_date = arguments['start_date']
+        self.start_index, self.end_index = (arguments['index'] if arguments['index']
+                                            else (1, self.getLastPage(self.board, self.timeout)))
+        logging.debug('Start date = %s', self.start_date)
+        logging.debug('Start = %d, End = %d', self.start_index, self.end_index)
+
+        self.json_folder = arguments['json_folder']
+        self.json_prefix = arguments['json_prefix']
+
+        if arguments['verbose']:
+            logging.getLogger().setLevel(logging.DEBUG)
+
+    def _init_config(self, config_path: str):
+        self.config = load_config(config_path)
+        self.article_config = self.config['PttArticle']
+        self.database_config = self.config['Database']
+
+        self.DELAY_TIME = float(self.article_config['Delaytime'])
+        self.NEXT_PAGE_DELAY_TIME = float(
+            self.article_config['NextPageDelaytime'])
+
+        self.json_output = False
+        self.database_output = False
+        if 'Output' in self.article_config:
+            if self.article_config['Output'] == 'both':
+                self.json_output = True
+                self.database_output = True
+            elif self.article_config['Output'] == 'database':
+                self.json_output = False
+                self.database_output = True
+            elif self.article_config['Output'] == 'json':
+                self.json_output = True
+                self.database_output = False
+
+    def _init_database(self):
+        self.db = PttDatabase(dbtype=self.database_config['Type'],
+                              dbname=self.database_config['Name'])
+        self.db_session = self.db.get_session()
+
+    def _output_json(self, result: Dict[str, object], index):
+        json_name = '{prefix}{board}_{index}.json'.format(prefix=self.json_prefix,
+                                                          board=self.board,
+                                                          index=index)
+        json_path = os.path.join(self.json_folder, json_name)
         with codecs.open(json_path, 'w', encoding='utf-8') as jsonfile:
-            json.dump(result, jsonfile, sort_keys=True,
-                      indent=4, ensure_ascii=False)
+            json.dump(result, jsonfile,
+                      sort_keys=True,
+                      indent=4,
+                      ensure_ascii=False)
 
-    @log
+    @log('Output_Database')
     def _output_database(self, result: List[Dict[str, object]]):
         def parser_push_ipdatetime(push_ipdatetime):
             match = re.search(
@@ -95,13 +117,13 @@ class PttArticleCrawler(PttWebCrawler):
             author_values = {'username': author_username,
                              'login_times': 0,
                              'valid_article_count': 0}
-            user, is_new_user = self.db.get_or_create(self.db_session,
-                                                      User,
-                                                      author_conditon,
-                                                      author_values)
-            board, is_new_board = self.db.get_or_create(self.db_session, Board,
-                                                        {'name': record['board']},
-                                                        {'name': record['board']})
+            user, _ = self.db.get_or_create(self.db_session,
+                                            User,
+                                            author_conditon,
+                                            author_values)
+            board, _ = self.db.get_or_create(self.db_session, Board,
+                                             {'name': record['board']},
+                                             {'name': record['board']})
             article, is_new_article = self.db.get_or_create(self.db_session, Article,
                                                             {'web_id': record['article_id']},
                                                             {'web_id': record['article_id'],
@@ -110,10 +132,11 @@ class PttArticleCrawler(PttWebCrawler):
                                                                 'post_datetime': datetime.strptime(record['date'],
                                                                                                    '%a %b %d %H:%M:%S %Y'),
                                                                 'post_ip': record['ip']})
-            aritcle_ipasn, _ = self.db.get_or_create(self.db_session,
-                                                     IpAsn,
-                                                     {'ip': record['ip']},
-                                                     {'ip': record['ip']})
+            if record['ip']:
+                _, _ = self.db.get_or_create(self.db_session,
+                                             IpAsn,
+                                             {'ip': record['ip']},
+                                             {'ip': record['ip']})
 
             # 1. 新文章
             # 2. 舊文章發生修改
@@ -139,10 +162,10 @@ class PttArticleCrawler(PttWebCrawler):
                 push_user_values = {'username': message['push_userid'],
                                     'login_times': None,
                                     'valid_article_count': None}
-                push_user, is_new_push_user = self.db.get_or_create(self.db_session,
-                                                                    User,
-                                                                    push_user_condition,
-                                                                    push_user_values)
+                push_user, _ = self.db.get_or_create(self.db_session,
+                                                     User,
+                                                     push_user_condition,
+                                                     push_user_values)
                 push_ip, push_datetime = parser_push_ipdatetime(
                     message['push_ipdatetime'])
 
@@ -153,55 +176,45 @@ class PttArticleCrawler(PttWebCrawler):
                                       push_content=message['push_content'],
                                       push_ip=push_ip,
                                       push_datetime=push_datetime))
-                push_ipasn, _ = self.db.get_or_create(self.db_session,
-                                                      IpAsn,
-                                                      {'ip': push_ip},
-                                                      {'ip': push_ip})
+                if push_ip:
+                    _, _ = self.db.get_or_create(self.db_session,
+                                                 IpAsn,
+                                                 {'ip': push_ip},
+                                                 {'ip': push_ip})
 
             self.db.bulk_insert(self.db_session, push_list)
 
-    @log
-    def go(self, arguments: Dict[str, str]):
-        self._init_crawler(arguments)
+    @log()
+    def crawling(self):
+        last_page = self.end_index
 
-        board = arguments['board_name']
-        timeout = int(self.config['PttArticle']['Timeout'])
+        while last_page >= self.start_index:
+            ptt_index_url = (self.PTT_URL +
+                             self.PTT_Board_Format).format(board=self.board,
+                                                           index=last_page)
+            logging.debug('Processing index: %d, Url = %s',
+                          last_page, ptt_index_url)
 
-        start_date = (datetime.strptime(arguments['start_date'], '%Y-%m-%d')
-                      if arguments['start_date']
-                      else None)
+            resp = requests.get(url=ptt_index_url,
+                                cookies={'over18': '1'},
+                                timeout=self.timeout)
 
-        start_index, end_index = ((arguments['index'])
-                                  if arguments['index']
-                                  else (1, self.getLastPage(board)))
-        last_page = end_index
-
-        self.DELAY_TIME = float(self.config['PttArticle']['Delaytime'])
-        self.NEXT_PAGE_DELAY_TIME = float(
-            self.config['PttArticle']['NextPageDelaytime'])
-        while last_page >= start_index:
-            logging.info('Processing index: %d', last_page)
-
-            resp = requests.get(
-                url=(self.PTT_URL +
-                     self.PTT_Board_Format).format(board=board, index=last_page),
-                cookies={'over18': '1'},
-                timeout=timeout
-            )
             if resp.status_code != 200:
-                raise RuntimeError(
-                    'invalid url: {url}'.format(url=resp.url))
+                logging.error('Processing index error, status_code = %d, Url = %s',
+                              resp.status_code, ptt_index_url)
+                resp.raise_for_status()
 
             soup = BeautifulSoup(resp.text, 'html.parser')
-            divs = soup.find(
-                "div", "r-list-container action-bar-margin bbs-screen")
-            children = divs.findChildren("div", recursive=False)
+            divs = soup.find("div",
+                             "r-list-container action-bar-margin bbs-screen")
+            children = divs.findChildren("div",
+                                         recursive=False)
 
             article_list = []
 
             for div in children:
+                # ex. link would be <a href="/bbs/PublicServan/M.1127742013.A.240.html">Re: [問題] 職等</a>
                 try:
-                    # ex. link would be <a href="/bbs/PublicServan/M.1127742013.A.240.html">Re: [問題] 職等</a>
                     if 'r-list-sep' in div['class']:
                         break
                     elif 'r-ent' in div['class']:
@@ -210,30 +223,42 @@ class PttArticleCrawler(PttWebCrawler):
                         article_id = re.sub(
                             '\.html', '', href.split('/')[-1])
 
-                        logging.info('Processing article: %s', article_id)
+                        logging.debug('Processing article: %s, Url = %s',
+                                      article_id, link)
 
                         article_list.append(json.loads(
-                            self.parse(link, article_id, board)))
+                            self.parse(link, article_id, self.board, self.timeout)))
                         time.sleep(self.DELAY_TIME)
                     else:
                         continue
-                except:
-                    pass
+                except Exception as e:
+                    logging.exception('Processing article error, Url = %s',
+                                      link)
+                    logging.debug('Exception retry')
+                    resp = requests.get(url=link,
+                                        cookies={'over18': '1'},
+                                        timeout=self.timeout)
+                    if resp.status_code != 200:
+                        resp.raise_for_status()
 
-            if start_date:
+            len_article_list = len(article_list)
+            if self.start_date:
                 tmp_article_list = []
                 for article in article_list:
                     try:
                         aritcle_date = datetime.strptime(article['date'],
                                                          '%a %b %d %H:%M:%S %Y')
-                        if start_date <= aritcle_date:
+                        if self.start_date <= aritcle_date:
                             tmp_article_list.append(article)
                     except Exception as e:
+                        # 避免因為原文的日期被砍，導致無法繼續處理
+                        len_article_list -= 1
                         logging.error('%s', e)
                         logging.error('article: %s , date format: %s',
                                       article['article_id'], article['date'])
-                if len(tmp_article_list) < len(article_list):
-                    start_index = last_page
+
+                if len(tmp_article_list) < len_article_list:
+                    self.start_index = last_page
                     article_list = tmp_article_list
 
             if self.database_output:
@@ -243,33 +268,13 @@ class PttArticleCrawler(PttWebCrawler):
             time.sleep(self.NEXT_PAGE_DELAY_TIME)
 
             if self.json_output:
-                prefix = arguments['json_prefix']
-                self._output_json(article_list, prefix, board, last_page)
+                self._output_json(article_list, last_page)
 
 
 def parse_args() -> Dict[str, str]:
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('--board-name',
-                        type=str.lower,
-                        required=True)
-
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--start-date',
-                       type=str)
-    group.add_argument('--index',
-                       type=int,
-                       metavar=('START_INDEX', 'END_INDEX'),
-                       nargs=2)
-
-    # Output
-    parser.add_argument('--json-prefix',
-                        type=str,
-                        default='')
-
-    # Config path
-    parser.add_argument('--config-path',
-                        type=str)
+    base_subparser = get_base_parser()
+    parser = argparse.ArgumentParser(parents=[base_subparser])
+    add_article_arg_parser(parser)
 
     args = parser.parse_args()
     arguments = vars(args)
@@ -278,8 +283,8 @@ def parse_args() -> Dict[str, str]:
 
 def main():
     args = parse_args()
-    crawler = PttArticleCrawler()
-    crawler.go(args)
+    crawler = PttArticleCrawler(args)
+    crawler.crawling()
 
 
 if __name__ == "__main__":

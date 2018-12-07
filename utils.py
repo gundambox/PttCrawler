@@ -21,20 +21,21 @@ def _get_class_that_defined_method(meth):
     return getattr(meth, '__objclass__', None)
 
 
-def log(func):
-    def wrapper(*args, **kwargs):
-        func_name = '{cls}.{func}'.format(cls=_get_class_that_defined_method(func).__name__,
-                                          func=func.__name__)
-        logging.info('Start: %s', func_name)
-        try:
-            result = func(*args, **kwargs)
-            return result
-        except Exception as e:
-            logging.exception('There was an exception in %s', func_name)
-
-        logging.info('Finished: %s', func_name)
-
-    return wrapper
+def log(func_alias: str = None):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            func_name = '{cls}.{func}'.format(cls=_get_class_that_defined_method(func).__name__,
+                                              func=(func_alias or func.__name__))
+            logging.info('Start: %s', func_name)
+            try:
+                result = func(*args, **kwargs)
+                logging.info('Finished: %s', func_name)
+                return result
+            except Exception as e:
+                logging.info('Aborted: %s', func_name)
+                logging.exception('There was an exception in %s', func_name)
+        return wrapper
+    return decorator
 
 
 def valid_datetime_type(arg_datetime_str):

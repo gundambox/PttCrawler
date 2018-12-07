@@ -6,7 +6,7 @@ import re
 import sys
 import time
 from typing import Dict, List
-
+import shutil
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver import Chrome, ChromeOptions
 from selenium.webdriver.common.action_chains import ActionChains
@@ -14,6 +14,8 @@ from selenium.webdriver.common.keys import Keys
 
 from models import IpAsn, PttDatabase, User, UserLastRecord
 from utils import load_config, log
+import logging
+from .crawler_arg import add_user_arg_parser, get_base_parser
 
 
 class PttDisconnectException(WebDriverException):
@@ -22,16 +24,26 @@ class PttDisconnectException(WebDriverException):
 
 class PttBrowser(object):
 
-    ACT_DELAY_TIME = 1
+    ACT_DELAY_TIME = 2
+    BROWSER_DEBUG_FOLDER = 'BrowserDebug'
+    BROWSER_DEBUG_IMG_ROTATION = 50
 
-    def __init__(self, executable_path: str, options: ChromeOptions):
+    def __init__(self, executable_path: str, options: ChromeOptions, *args, **kwargs):
         self.executable_path = executable_path
         self.options = options
+
+        self.debug_img_count = 1
+        if 'debug_mode' in kwargs and kwargs['debug_mode']:
+            self.debug_mode = True
+            if os.path.exists(self.BROWSER_DEBUG_FOLDER):
+                shutil.rmtree(self.BROWSER_DEBUG_FOLDER, ignore_errors=True)
+            os.makedirs(self.BROWSER_DEBUG_FOLDER)
 
     def __enter__(self):
         try:
             self.browser = Chrome(executable_path=self.executable_path,
                                   chrome_options=self.options)
+            self.browser.set_window_size(1920, 1080)
             return self
         except Exception as e:
             print('Please Install chrome-browser or chromium-browser.')
@@ -45,6 +57,20 @@ class PttBrowser(object):
         time.sleep(self.ACT_DELAY_TIME)
 
     def send_keys(self, buffer: str):
+        if self.debug_mode:
+            image_path = os.path.join(self.BROWSER_DEBUG_FOLDER,
+                                      '{count}.png'.format(count=self.debug_img_count))
+            self.debug_img_count += 1
+            logging.debug('Saving debug img path: %s', image_path)
+            self.browser.save_screenshot(image_path)
+
+            if self.debug_img_count > self.BROWSER_DEBUG_IMG_ROTATION:
+                image_path = os.path.join(self.BROWSER_DEBUG_FOLDER,
+                                          '{count}.png'.format(count=(self.debug_img_count-self.BROWSER_DEBUG_IMG_ROTATION)))
+                if os.path.exists(image_path):
+                    os.remove(image_path)
+
+        logging.debug('Send buffer: %s', buffer)
         ActionChains(self.browser). \
             send_keys(buffer). \
             send_keys(Keys.ENTER). \
@@ -63,6 +89,7 @@ class PttBrowser(object):
         alert_div = self.browser.find_element_by_xpath(
             "//div[@id='reactAlert']")
         if alert_div and u'你斷線了' in alert_div.text:
+            logging.error('Lose connection!?')
             return True
         else:
             return False
@@ -71,12 +98,25 @@ class PttBrowser(object):
 class PttUserCrawler(object):
     PTT_WEB_URL = 'http://term.ptt.cc/'
 
-    def __init__(self):
-        pass
+    def __init__(self, arguments: Dict):
+        self.db_input = arguments['database'] or False
+        self.id_list = ('' if self.db_input else arguments['id'])
+
+        config_path = (arguments['config_path'] or 'config.ini')
+
+        self._init_config(config_path)
+        self._init_database()
+        self._init_browser()
+
+        self.ptt_browser_buffer_logger = logging.getLogger(__name__ + '.log')
+
+        self.json_prefix = arguments['json_prefix']
+        self.debug_mode = arguments['debug_mode']
+        if arguments['verbose']:
+            logging.getLogger().setLevel(logging.DEBUG)
 
     def _init_config(self, config_path: str):
         self.config = load_config(config_path)
-
         if self.config['PttUser']['Output'] == 'both':
             self.json_output = True
             self.database_output = True
@@ -112,33 +152,24 @@ class PttUserCrawler(object):
         self.chrome_options = ChromeOptions()
         self.chrome_options.add_argument('--headless')
 
-    def _init_crawler(self, arguments: Dict[str, str]):
-
-        config_path = (arguments['config_path']
-                       if arguments['config_path']
-                       else 'config.ini')
-
-        self._init_config(config_path)
-        self._init_database()
-        self._init_browser()
-
-    def _get_id_list(self, arguments: Dict[str, str]) -> List[str]:
-        if arguments.get('id'):
-            return arguments.get('id').split(',')
+    def _get_id_list(self) -> List[str]:
+        if self.db_input:
+            return list(map(lambda user: user.username,
+                            self.db_session.query(User).order_by(User.login_times, User.id).all()))
         else:
-            return list(map(lambda user: user.username, self.db.get_list(self.db_session, User, {})))
+            return self.id_list.split(',')
 
-    def _output_json(self, result: Dict[str, object], json_prefix):
-        current_time_str = datetime.datetime.now().strftime('%Y-%m-%d_result')
-        json_path = '{prefix}{time}.json'.format(prefix=json_prefix,
-                                                 time=current_time_str)
+    def _output_json(self, result: Dict[str, object], count):
+        json_path = '{prefix}user_{count}.json'.format(prefix=self.json_prefix,
+                                                       count=count)
         with open(json_path, 'w') as jsonfile:
-            json.dump(result, jsonfile, sort_keys=True, indent=4)
+            json.dump(result, jsonfile,
+                      sort_keys=True,
+                      indent=4)
 
-    @log
+    @log('Output_Database')
     def _output_database(self, result: List[Dict[str, object]]):
         for record in result:
-
             user, is_new_user = self.db.get_or_create(self.db_session,
                                                       User,
                                                       {'username': record['username']},
@@ -155,19 +186,18 @@ class PttUserCrawler(object):
             last_record = UserLastRecord(last_login_datetime=last_login_datetime,
                                          last_login_ip=record['last_login_ip'])
             last_record.user_id = user.id
-
-            ipasn, is_new_ip = self.db.get_or_create(self.db_session,
-                                                     IpAsn,
-                                                     {'ip': record['last_login_ip']},
-                                                     {'ip': record['last_login_ip']})
+            if record['last_login_ip']:
+                _, _ = self.db.get_or_create(self.db_session,
+                                             IpAsn,
+                                             {'ip': record['last_login_ip']},
+                                             {'ip': record['last_login_ip']})
 
             self.db_session.add(last_record)
             self.db_session.commit()
 
-    def _output(self, result: Dict[str, object], arguments: Dict[str, str]):
+    def _output(self, result: Dict[str, object], count):
         if self.json_output:
-            prefix = arguments['json_prefix']
-            self._output_json(result, prefix)
+            self._output_json(result, count)
         if self.database_output:
             self._output_database(result)
 
@@ -183,19 +213,18 @@ class PttUserCrawler(object):
             browser.send_keys('')
             buffer = browser.get_buffer()
 
-    @log
-    def go(self, arguments: Dict[str, str]):
-        self._init_crawler(arguments)
+    @log()
+    def crawling(self):
 
         delaytime = float(self.config['PttUser']['Delaytime'])
         userid = self.config['PttUser']['UserId']
         userpwd = self.config['PttUser']['UserPwd']
 
-        id_list = self._get_id_list(arguments)
+        id_list = self._get_id_list()
 
         crawler_result = []
 
-        with PttBrowser(self.webdriver_path, self.chrome_options) as browser:
+        with PttBrowser(self.webdriver_path, self.chrome_options, debug_mode=self.debug_mode) as browser:
 
             browser.ACT_DELAY_TIME = delaytime
 
@@ -205,11 +234,16 @@ class PttUserCrawler(object):
             browser.send_keys('T')
 
             id_queue = id_list.copy()
+            count = 1
+            err_count = 0
             while len(id_queue) > 0:
                 for user_id in id_list:
                     try:
                         browser.send_keys('Q').send_keys(user_id)
                         buffer = browser.get_buffer()
+
+                        self.ptt_browser_buffer_logger.debug('Buffer:\n%s',
+                                                             buffer)
 
                         pattern = r"[\w\W]*《登入次數》(\d*)\D*次\D*《有效文章》\D*(\d*)[\w\W]*《上次上站》\D*([\d]{1,2}\/[\d]{1,2}\/[\d]{4}\W*[\d]{1,2}:\W*[\d]{1,2}:\W*[\d]{1,2}\W*\w*)\D*《上次故鄉》([\d.]*)"
                         pat = re.compile(pattern)
@@ -228,52 +262,37 @@ class PttUserCrawler(object):
                                                    'last_login_ip': last_login_ip})
 
                             if len(crawler_result) % 100 == 0:
-                                self._output(crawler_result, arguments)
+                                self._output(crawler_result, count)
+                                count += 1
                                 crawler_result = []
                         else:
-                            print('User \'{user_id}\' has error'.format(
-                                user_id=user_id))
+                            logging.error('User "%s" has error', user_id)
+                            self.ptt_browser_buffer_logger.error('Buffer:\n%s',
+                                                                 buffer)
 
                         browser.send_keys('')
                         id_queue.remove(user_id)
+                    except KeyboardInterrupt:
+                        id_queue = []
+                        break
+                    except PttDisconnectException as e:
+                        err_count += 1
+                        if err_count == 3:
+                            raise e
 
-                    except PttDisconnectException:
                         browser.send_keys('')
                         self._login_ptt(browser, userid, userpwd)
                         browser.send_keys('T')
                         continue
 
-                self._output(crawler_result, arguments)
+                self._output(crawler_result, count)
+                count += 1
 
 
 def parse_args() -> Dict[str, str]:
-    parser = argparse.ArgumentParser()
-
-    # user id input
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--id',
-                       type=str)
-    group.add_argument('--database', action='store_true')
-
-    # Config path
-    parser.add_argument('--config-path',
-                        type=str)
-
-    # Output
-    parser.add_argument('--json-prefix',
-                        type=str,
-                        default='')
-
-    # debug msg
-    parser.add_argument('--verbose',
-                        action='store_true')
-    parser.add_argument('--quiet',
-                        action='store_true')
-
-    # version
-    parser.add_argument('--version',
-                        action='version',
-                        version='%(prog)s 1.0')
+    base_subparser = get_base_parser()
+    parser = argparse.ArgumentParser(parents=[base_subparser])
+    add_user_arg_parser(parser)
 
     args = parser.parse_args()
     arguments = vars(args)
@@ -282,8 +301,8 @@ def parse_args() -> Dict[str, str]:
 
 def main():
     args = parse_args()
-    crawler = PttUserCrawler()
-    crawler.go(args)
+    crawler = PttUserCrawler(args)
+    crawler.crawling()
 
 
 if __name__ == "__main__":

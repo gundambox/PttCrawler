@@ -1,4 +1,5 @@
 import argparse
+import logging
 from datetime import datetime
 from typing import Dict, List
 
@@ -8,70 +9,65 @@ from ipwhois.net import Net
 from models import IpAsn, PttDatabase
 from utils import load_config, log
 
+from .crawler_arg import add_asn_arg_parser, get_base_parser
+
 
 class PttIpAsnCrawler(object):
-    def __init__(self):
-        pass
-
-    def _init_crawler(self, arguments: Dict[str, str]):
-        config_path = (arguments['config_path']
-                       if arguments['config_path']
-                       else 'config.ini')
-
-        self.config = load_config(config_path)
-
+    def __init__(self, arguments: Dict):
         self.db_input = arguments['database'] or False
+        self.ip_list = ('' if self.db_input else arguments['ip_list'])
 
-        self.db = PttDatabase(dbtype=self.config['Database']['Type'],
-                              dbname=self.config['Database']['Name'])
+        config_path = (arguments['config_path'] or 'config.ini')
+        self.config = load_config(config_path)
+        self.database_config = self.config['Database']
+
+        self._init_database()
+
+        if arguments['verbose']:
+            logging.getLogger().setLevel(logging.DEBUG)
+
+    def _init_database(self):
+        self.db = PttDatabase(dbtype=self.database_config['Type'],
+                              dbname=self.database_config['Name'])
         self.db_session = self.db.get_session()
 
-    def _get_ip_list(self, arguments: Dict[str, str]):
+    def _get_ip_list(self):
         if self.db_input:
-            ip_list = list(map(lambda ipasn: str(ipasn.ip),
-                               self.db.get_list(self.db_session, IpAsn, {})))
+            return list(map(lambda ipasn: str(ipasn.ip),
+                            self.db_session.query(IpAsn).order_by(IpAsn.asn).all()))
         else:
-            ip_list = arguments['ip_list'].split(',')
+            return self.ip_list.split(',')
 
-        return ip_list
-
-    @log
-    def _output_db(self, result: List[Dict[str, str]]):
+    @log('Output_Database')
+    def _output_database(self, result: List[Dict[str, str]]):
         self.db.bulk_update(self.db_session, IpAsn, result)
 
-    @log
-    def go(self, arguments: Dict[str, str]):
-        self._init_crawler(arguments)
-        ip_list = self._get_ip_list(arguments)
+    @log()
+    def crawling(self):
+        ip_list = self._get_ip_list()
 
         ip_result = []
         for ip in ip_list:
-            net = Net(ip)
-            obj = IPASN(net)
-            result = {'ip': ip}
-            result.update(obj.lookup())
-            result['asn_date'] = datetime.strptime(
-                result['asn_date'], '%Y-%m-%d')
-            ip_result.append(result)
+            if ip:
+                net = Net(ip)
+                obj = IPASN(net)
+                result = {'ip': ip}
+                result.update(obj.lookup())
+                result['asn_date'] = datetime.strptime(result['asn_date'],
+                                                       '%Y-%m-%d')
+                ip_result.append(result)
 
-            if len(ip_result) % 100 == 0:
-                self._output_db(ip_result)
-                ip_result = []
+                if len(ip_result) % 100 == 0:
+                    self._output_database(ip_result)
+                    ip_result = []
 
-        self._output_db(ip_result)
+        self._output_database(ip_result)
 
 
 def parse_args() -> Dict[str, str]:
-    parser = argparse.ArgumentParser()
-
-    input_group = parser.add_mutually_exclusive_group(required=True)
-    input_group.add_argument('--ip-list',
-                             type=str)
-    input_group.add_argument('--database', action='store_true')
-
-    # Config path
-    parser.add_argument('--config-path',
-                        type=str)
+    base_subparser = get_base_parser()
+    parser = argparse.ArgumentParser(parents=[base_subparser])
+    add_asn_arg_parser(parser)
 
     args = parser.parse_args()
     arguments = vars(args)
@@ -80,8 +76,8 @@ def parse_args() -> Dict[str, str]:
 
 def main():
     args = parse_args()
-    crawler = PttIpAsnCrawler()
-    crawler.go(args)
+    crawler = PttIpAsnCrawler(args)
+    crawler.crawling()
 
 
 if __name__ == "__main__":

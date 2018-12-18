@@ -32,11 +32,14 @@ class PttExportHelper(object):
         self.output_folder = arguments['output_folder']
         self.output_prefix = arguments['output_prefix']
 
+        if not os.path.exists(self.output_folder):
+            os.makedirs(self.output_folder)
+
         self.db = PttDatabase(dbtype=self.config['Database']['Type'],
                               dbname=self.config['Database']['Name'])
         self.db_session = self.db.get_session()
 
-    @log
+    @log('Get Data')
     def _get_export_rows(self):
         article_rows = [['Atricle.web_id', 'Article.board', 'Atricle.author', 'Atricle.title', 'Atricle.cotent',
                          'Atricle.post_ip', 'Atricle.post_ip.asn', 'Atricle.post_ip.asn_date', 'Atricle.post_ip.asn_registry',
@@ -111,7 +114,7 @@ class PttExportHelper(object):
 
         return data
 
-    @log
+    @log('Export CSV')
     def _export_csv(self):
         data = self._get_export_rows()
 
@@ -126,7 +129,7 @@ class PttExportHelper(object):
                 for row in rows:
                     csvwriter.writerow(row)
 
-    @log
+    @log('Export Ods')
     def _export_ods(self):
         output_filename = 'Ptt_report_{export_datetime}'.format(
             export_datetime=datetime.now().strftime('%Y-%m-%d'))
@@ -137,7 +140,7 @@ class PttExportHelper(object):
         data = self._get_export_rows()
         save_data(output_path, data)
 
-    @log
+    @log()
     def go(self, arguments: Dict[str, str]):
         self._init_helper(arguments)
 

@@ -1,14 +1,18 @@
-# ReadMe
+# PttCrawler
 
-## 安裝
+## Dependencies
+
+* Python 3.x
+
+## Installation
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## 設定
+## Configuration
 
-1. 複製`config_example.ini`為`config.ini`
+1. Copy `config_example.ini` as `config.ini`
 
 ```bash
 cp config_example.ini config.ini
@@ -19,25 +23,25 @@ cp config_example.ini config.ini
 ```ini
 [Database]
 # Database Url: [Type]://[Name]
-# 目前只支援SQLite
+# Currently only support SQLite
 Type = sqlite
 Name = ptt.db
 
 [PttUser]
-# term.ptt.cc 每個動作的間隔
+# term.ptt.cc every action delaytime
 Delaytime = 2
-# selenium 需要用到的webdriver的資料夾
+# selenium webdriver folder
 WebdriverFolder = webdriver
-# term.ptt.cc 的 登入帳號密碼
+# term.ptt.cc bot login id/password
 UserId = guest
 UserPwd = guest
 # Choices = {database, json, both}
 Output = both
 
 [PttArticle]
-# Delaytime 是每篇文章之間的Delaytime
-# NextPageDelaytime 是WebPtt索引頁之間的Delaytime
-Delaytime = 1.0
+# Delaytime: delay time for each article
+# NextPageDelaytime: delay time for each index
+Delaytime = 2.0
 NextPageDelaytime = 10.0
 # request timeout
 Timeout = 10
@@ -45,37 +49,29 @@ Timeout = 10
 Output = both
 ```
 
-## 使用
+## Usage
 
 ### Crawler
 
-1. PTT 文章爬蟲
+1. PTT Article
 
-    從WebPtt爬取文章
+```bash
+python -m crawler article (--start-date | --index START_INDEX END_INDEX) [--config-path CONFIG_PATH]
+```
 
-    ```bash
-    python -m crawler article (--start-date | --index START_INDEX END_INDEX) [--config-path CONFIG_PATH]
-    ```
+2. PTT User last login record
 
-2. PTT 鄉民上站紀錄爬蟲
+```bash
+python -m crawler user (--database | --ip IP) [--config-path CONFIG_PATH]
+```
 
-    利用term.ptt.cc爬取上站紀錄、登入次數、有效文章
+3. PTT Ip autonomous system number
 
-    ```bash
-    python -m crawler user (--database | --ip IP) [--config-path CONFIG_PATH]
-    ```
-
-3. PTT 查Ip Autonomous System Number
-
-    查Ip的ASN(主要查Country code)
-
-    ```bash
-    python -m crawler asn (--database | --id ID) [--config-path CONFIG_PATH]
-    ```
+```bash
+python -m crawler asn (--database | --id ID) [--config-path CONFIG_PATH]
+```
 
 ### Export
-
-匯出成ods或csv
 
 ```bash
 python export.py --format {ods, csv} --output-folder OUTPUT_FOLDER [--output-prefix OUTPUT_PREFIX]
@@ -86,7 +82,7 @@ python export.py --format {ods, csv} --output-folder OUTPUT_FOLDER [--output-pre
 1. Update
 
 ```bash
-python schedule.py update {article, asn, user} -c CYCLE_TIME [-s START_DATETIME]
+python schedule.py update {article, asn, user} -c CYCLE_TIME [-s START_DATETIME] [--virtualenv VIRTUALENV_PATH]
 ```
 
 2. Remove
@@ -97,10 +93,10 @@ python schedule.py remove {article, asn, user}
 
 ## Todo
 
-- [ ] PttArticleCrawler改用`Scrapy`框架
-- [ ] PttArticleCrawler的`crawling`方法要分為兩個，一個負責抓取`index`跟`web_id`，一個負責抓取與`web_id`對應的文章
+- [ ] PttArticleCrawler uses the `Scrapy` framework instead
+- [ ] PttArticleCrawler's `crawling` method have to be divided into two, one is for fetching `index` and `web_id`, one is for fetching the article content corresponding to `web_id`
 
-## 檔案結構
+## Architecture
 
 ```
 PttCrawler/

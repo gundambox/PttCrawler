@@ -119,6 +119,7 @@ def parse_argument():
                                 type=str,
                                 help='Config ini file path.')
     base_subparser.add_argument('--virtualenv',
+                                metavar='VIRTUALENV_PATH',
                                 type=str,
                                 default='')
 

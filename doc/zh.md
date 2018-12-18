@@ -1,4 +1,8 @@
-# ReadMe
+# PttCrawler
+
+## 相依性
+
+* Python 3.x
 
 ## 安裝
 
@@ -37,7 +41,7 @@ Output = both
 [PttArticle]
 # Delaytime 是每篇文章之間的Delaytime
 # NextPageDelaytime 是WebPtt索引頁之間的Delaytime
-Delaytime = 1.0
+Delaytime = 2.0
 NextPageDelaytime = 10.0
 # request timeout
 Timeout = 10
@@ -97,7 +101,7 @@ python schedule.py remove {article, asn, user}
 
 ## Todo
 
-- [ ] PttArticleCrawler改用`Scrapy`框架
+- [ ] PttArticleCrawler改用`Scrapy`框架替代
 - [ ] PttArticleCrawler的`crawling`方法要分為兩個，一個負責抓取`index`跟`web_id`，一個負責抓取與`web_id`對應的文章
 
 ## 檔案結構

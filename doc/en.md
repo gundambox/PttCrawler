@@ -3,22 +3,55 @@
 ## Dependencies
 
 * Python 3.x
+* libssl-dev
 
 ## Installation
 
+1. git clone
+
 ```bash
-pip install -r requirements.txt
+git clone https://github.com/GundamBox/PttCrawler.git
 ```
 
-## Configuration
+![img1](img/1.PNG)
 
-1. Copy `config_example.ini` as `config.ini`
+2. change directory
+
+```bash
+cd PttCrawler
+```
+
+![img1](img/2.PNG)
+
+3. Check Python and Pip Version
+
+Must use Python3
+
+```bash
+sudo apt-get install python3 python3-pip
+```
+
+![img1](img/3.PNG)
+
+4. Install Package
+
+```bash
+sudo apt-get install libssl-dev
+sudo pip3 install -r requirements.txt 
+```
+
+![img1](img/4.PNG)
+![img1](img/5.PNG)
+
+5. Copy `config_example.ini` as `config.ini`
 
 ```bash
 cp config_example.ini config.ini
 ```
 
-2. `config.ini`
+![img1](img/6.PNG)
+
+## Configuration
 
 ```ini
 [Database]

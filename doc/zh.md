@@ -3,22 +3,55 @@
 ## 相依性
 
 * Python 3.x
+* libssl-dev
 
 ## 安裝
 
+1. git clone
+
 ```bash
-pip install -r requirements.txt
+git clone https://github.com/GundamBox/PttCrawler.git
 ```
 
-## 設定
+![img1](img/1.PNG)
 
-1. 複製`config_example.ini`為`config.ini`
+2. change directory
+
+```bash
+cd PttCrawler
+```
+
+![img1](img/2.PNG)
+
+3. Check Python and Pip Version
+
+必須是 Python3
+
+```bash
+sudo apt-get install python3 python3-pip
+```
+
+![img1](img/3.PNG)
+
+4. Install Package
+
+```bash
+sudo apt-get install libssl-dev
+sudo pip3 install -r requirements.txt 
+```
+
+![img1](img/4.PNG)
+![img1](img/5.PNG)
+
+5. 複製`config_example.ini`為`config.ini`
 
 ```bash
 cp config_example.ini config.ini
 ```
 
-2. `config.ini`
+![img1](img/6.PNG)
+
+## 設定
 
 ```ini
 [Database]

@@ -1,12 +1,12 @@
-#ReadMe
+# ReadMe
 
-## Installation
+## 安裝
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Configuration
+## 設定
 
 1. 複製`config_example.ini`為`config.ini`
 
@@ -45,7 +45,7 @@ Timeout = 10
 Output = both
 ```
 
-## Usage
+## 使用
 
 ### Crawler
 

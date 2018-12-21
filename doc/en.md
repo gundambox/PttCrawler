@@ -126,8 +126,8 @@ python schedule.py remove {article, asn, user}
 
 ## Todo
 
-- [ ] PttArticleCrawler uses the `Scrapy` framework instead
 - [ ] PttArticleCrawler's `crawling` method have to be divided into two, one is for fetching `index` and `web_id`, one is for fetching the article content corresponding to `web_id`
+- [ ] Record the last execution result to avoid running from the beginning when program crashed
 
 ## Architecture
 

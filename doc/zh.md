@@ -134,8 +134,8 @@ python schedule.py remove {article, asn, user}
 
 ## Todo
 
-- [ ] PttArticleCrawler改用`Scrapy`框架替代
 - [ ] PttArticleCrawler的`crawling`方法要分為兩個，一個負責抓取`index`跟`web_id`，一個負責抓取與`web_id`對應的文章
+- [ ] 記錄上次執行結果，避免從頭開始跑
 
 ## 檔案結構
 

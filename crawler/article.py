@@ -14,13 +14,12 @@ from bs4 import BeautifulSoup
 
 from models import (Article, ArticleHistory, Board, IpAsn, PttDatabase, Push,
                     User, UserLastRecord)
-from PttWebCrawler.crawler import PttWebCrawler
 from utils import load_config, log
 
 from .crawler_arg import add_article_arg_parser, get_base_parser
 
 
-class PttArticleCrawler(PttWebCrawler):
+class PttArticleCrawler:
 
     PTT_URL = 'https://www.ptt.cc'
     PTT_Board_Format = '/bbs/{board}/index{index}.html'
@@ -30,15 +29,18 @@ class PttArticleCrawler(PttWebCrawler):
     @log('Initialize')
     def __init__(self, arguments: Dict):
 
-        super().__init__(as_lib=True)
-
         config_path = (arguments['config_path'] or 'config.ini')
 
         self._init_config(config_path)
         self._init_database()
 
         self.board = arguments['board_name']
-        self.timeout = float(self.article_config['Timeout'])
+        self.timeout = None
+        # self.timeout = float(self.article_config['Timeout'])
+
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:64.0) Gecko/20100101 Firefox/64.0'}
+        self.cookies = {'over18': '1'}
 
         self.start_date = arguments['start_date']
         self.start_index, self.end_index = (arguments['index'] if arguments['index']
@@ -184,11 +186,138 @@ class PttArticleCrawler(PttWebCrawler):
 
             self.db.bulk_insert(self.db_session, push_list)
 
+    def parse(self, link, article_id, board, timeout=3):
+        """Ref: https://github.com/jwlin/ptt-web-crawler/blob/f8c04076004941d3f7584240c86a95a883ae16de/PttWebCrawler/crawler.py#L99"""
+        print('Processing article:', article_id)
+        resp = requests.get(url=link,
+                            headers=self.headers,
+                            cookies=self.cookies,
+                            verify=True,
+                            timeout=timeout)
+        self.cookies = resp.cookies
+        self.cookies['over18'] = '1'
+        if resp.status_code != 200:
+            print('invalid url:', resp.url)
+            return {"error": "invalid url"}
+            # return json.dumps({"error": "invalid url"}, sort_keys=True, ensure_ascii=False)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        main_content = soup.find(id="main-content")
+        metas = main_content.select('div.article-metaline')
+        author = ''
+        title = ''
+        date = ''
+        if metas:
+            author = metas[0].select('span.article-meta-value')[
+                0].string if metas[0].select('span.article-meta-value')[0] else author
+            title = metas[1].select('span.article-meta-value')[0].string if metas[1].select(
+                'span.article-meta-value')[0] else title
+            date = metas[2].select('span.article-meta-value')[0].string if metas[2].select(
+                'span.article-meta-value')[0] else date
+
+            # remove meta nodes
+            for meta in metas:
+                meta.extract()
+            for meta in main_content.select('div.article-metaline-right'):
+                meta.extract()
+
+        # remove and keep push nodes
+        pushes = main_content.find_all('div', class_='push')
+        for push in pushes:
+            push.extract()
+
+        try:
+            ip = main_content.find(text=re.compile(u'※ 發信站:'))
+            ip = re.search('[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*', ip).group()
+        except:
+            ip = "None"
+
+        # 移除 '※ 發信站:' (starts with u'\u203b'), '◆ From:' (starts with u'\u25c6'), 空行及多餘空白
+        # 保留英數字, 中文及中文標點, 網址, 部分特殊符號
+        filtered = [v for v in main_content.stripped_strings if v[0]
+                    not in [u'※', u'◆'] and v[:2] not in [u'--']]
+        expr = re.compile(
+            (r'[^\u4e00-\u9fa5\u3002\uff1b\uff0c\uff1a\u201c\u201d\uff08\uff09\u3001\uff1f\u300a\u300b\s\w:/-_.?~%()]'))
+        for i in range(len(filtered)):
+            filtered[i] = re.sub(expr, '', filtered[i])
+
+        filtered = [_f for _f in filtered if _f]  # remove empty strings
+        # remove last line containing the url of the article
+        filtered = [x for x in filtered if article_id not in x]
+        content = ' '.join(filtered)
+        content = re.sub(r'(\s)+', ' ', content)
+        # print 'content', content
+
+        # push messages
+        p, b, n = 0, 0, 0
+        messages = []
+        for push in pushes:
+            if not push.find('span', 'push-tag'):
+                continue
+            push_tag = push.find('span', 'push-tag').string.strip(' \t\n\r')
+            push_userid = push.find(
+                'span', 'push-userid').string.strip(' \t\n\r')
+            # if find is None: find().strings -> list -> ' '.join; else the current way
+            push_content = push.find('span', 'push-content').strings
+            push_content = ' '.join(push_content)[
+                1:].strip(' \t\n\r')  # remove ':'
+            push_ipdatetime = push.find(
+                'span', 'push-ipdatetime').string.strip(' \t\n\r')
+            messages.append({'push_tag': push_tag, 'push_userid': push_userid,
+                             'push_content': push_content, 'push_ipdatetime': push_ipdatetime})
+            if push_tag == u'推':
+                p += 1
+            elif push_tag == u'噓':
+                b += 1
+            else:
+                n += 1
+
+        # count: 推噓文相抵後的數量; all: 推文總數
+        message_count = {'all': p+b+n, 'count': p -
+                         b, 'push': p, 'boo': b, "neutral": n}
+
+        # print 'msgs', messages
+        # print 'mscounts', message_count
+
+        # json data
+        data = {
+            'url': link,
+            'board': board,
+            'article_id': article_id,
+            'article_title': title,
+            'author': author,
+            'date': date,
+            'content': content,
+            'ip': ip,
+            'message_count': message_count,
+            'messages': messages
+        }
+        # print 'original:', d
+        return data
+        # return json.dumps(data, sort_keys=True, ensure_ascii=False)
+
+    def getLastPage(self, board, timeout=3):
+        """Ref: https://github.com/jwlin/ptt-web-crawler/blob/f8c04076004941d3f7584240c86a95a883ae16de/PttWebCrawler/crawler.py#L189"""
+        resp = requests.get(
+            url='https://www.ptt.cc/bbs/' + board + '/index.html',
+            headers=self.headers,
+            cookies=self.cookies,
+            timeout=timeout
+        )
+        self.cookies = resp.cookies
+        self.cookies['over18'] = '1'
+        content = resp.content.decode('utf-8')
+        first_page = re.search(
+            r'href="/bbs/\w+/index(\d+).html">&lsaquo;', content)
+        if first_page is None:
+            return 1
+        return int(first_page.group(1)) + 1
+
     @log()
     def crawling(self):
         last_page = self.end_index
 
         while last_page >= self.start_index:
+            print('Processing index: ', last_page)
             ptt_index_url = (self.PTT_URL +
                              self.PTT_Board_Format).format(board=self.board,
                                                            index=last_page)
@@ -196,8 +325,11 @@ class PttArticleCrawler(PttWebCrawler):
                           last_page, ptt_index_url)
 
             resp = requests.get(url=ptt_index_url,
-                                cookies={'over18': '1'},
+                                headers=self.headers,
+                                cookies=self.cookies,
                                 timeout=self.timeout)
+            self.cookies = resp.cookies
+            self.cookies['over18'] = '1'
 
             if resp.status_code != 200:
                 logging.error('Processing index error, status_code = %d, Url = %s',
@@ -226,20 +358,16 @@ class PttArticleCrawler(PttWebCrawler):
                         logging.debug('Processing article: %s, Url = %s',
                                       article_id, link)
 
-                        article_list.append(json.loads(
-                            self.parse(link, article_id, self.board, self.timeout)))
+                        article_list.append(self.parse(link,
+                                                       article_id,
+                                                       self.board,
+                                                       self.timeout))
                         time.sleep(self.DELAY_TIME)
                     else:
                         continue
                 except Exception as e:
-                    logging.exception('Processing article error, Url = %s',
-                                      link)
-                    logging.debug('Exception retry')
-                    resp = requests.get(url=link,
-                                        cookies={'over18': '1'},
-                                        timeout=self.timeout)
-                    if resp.status_code != 200:
-                        resp.raise_for_status()
+                    logging.exception(
+                        'Processing article error, Url = %s', link)
 
             len_article_list = len(article_list)
             if self.start_date:

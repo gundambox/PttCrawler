@@ -4,6 +4,7 @@
 ### Chanage
 - 讓排程支援virtualenv
 - 調整文件跟README
+- Bypass Cloudflare
 
 ## [1.0.0] 2018-12-07
 ### Added

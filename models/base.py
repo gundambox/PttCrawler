@@ -19,14 +19,14 @@ class PttDatabase:
 
         if dbtype in self.DB_ENGINE.keys():
 
-            folder = os.path.dirname(dbname)
-            if folder != '':
-                if not os.path.exists(folder):
-                    os.makedirs(folder)
+            # folder = os.path.dirname(dbname)
+            # if folder != '':
+            #     if not os.path.exists(folder):
+            #         os.makedirs(folder)
 
             engine_url = self.DB_ENGINE[dbtype].format(DB=dbname)
             self.engine = create_engine(engine_url)
-            Base.metadata.create_all(self.engine, checkfirst=True)
+            # Base.metadata.create_all(self.engine, checkfirst=True)
         else:
             raise ValueError("DBType is not found in DB_ENGINE")
 

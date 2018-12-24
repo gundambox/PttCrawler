@@ -1,6 +1,8 @@
 # ChangeLog
 
 ## [Unreleased]
+
+## [1.0.1] 2018-12-24
 ### Chanage
 - 讓排程支援virtualenv
 - 調整文件跟README

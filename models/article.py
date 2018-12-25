@@ -15,12 +15,26 @@ class Board(Base):
     articles = relationship("Article", backref="Board")
 
 
+class ArticleIndex(Base):
+    __tablename__ = 'article_index'
+    web_id = Column(String(20),
+                    primary_key=True)
+    board_id = Column(Integer,
+                      ForeignKey('board.id'),
+                      nullable=False)
+    index = Column(Integer,
+                   nullable=False)
+
+    board = relationship("Board", backref="ArticleIndex")
+
+
 class Article(Base):
     __tablename__ = 'article'
     id = Column(Integer,
                 Sequence('article_id_seq'),
                 primary_key=True)
     web_id = Column(String(20),
+                    ForeignKey('article_index.web_id'),
                     nullable=False)
     user_id = Column(Integer,
                      ForeignKey('user.id'),
@@ -28,10 +42,10 @@ class Article(Base):
     board_id = Column(Integer,
                       ForeignKey('board.id'),
                       nullable=False)
-    post_datetime = Column(DateTime(20),
+    post_datetime = Column(DateTime(),
                            nullable=False)
     post_ip = Column(String(20),
-                     nullable=False)
+                     nullable=True)
 
     user = relationship("User", backref="Article")
     board = relationship("Board", backref="Article")
@@ -61,7 +75,7 @@ class ArticleHistory(Base):
                         ForeignKey('article.id'),
                         nullable=False)
     title = Column(String(64),
-                   nullable=False)
+                   nullable=True)
     content = Column(String,
                      nullable=False)
     start_at = Column(DateTime,

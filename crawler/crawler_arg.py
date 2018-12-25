@@ -18,8 +18,24 @@ def get_base_parser() -> argparse.ArgumentParser:
     return base_subparser
 
 
-def add_article_arg_parser(parser: argparse.ArgumentParser):
+def add_article_index_arg_parser(parser: argparse.ArgumentParser):
+    parser.add_argument('--board-name',
+                        type=str.lower,
+                        required=True)
+    parser.add_argument('--index',
+                        type=int)
 
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--before',
+                       action='store_true',
+                       dest='before')
+    group.add_argument('--after',
+                       action='store_false',
+                       dest='before')
+    parser.set_defaults(before=True)
+
+
+def add_article_arg_parser(parser: argparse.ArgumentParser):
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--start-date',
                        type=valid_date_type,
@@ -28,6 +44,8 @@ def add_article_arg_parser(parser: argparse.ArgumentParser):
                        type=int,
                        metavar=('START_INDEX', 'END_INDEX'),
                        nargs=2)
+    group.add_argument('--database',
+                       action='store_true')
     parser.add_argument('--board-name',
                         type=str.lower,
                         required=True)

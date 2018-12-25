@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Dict, List
 
@@ -34,20 +35,26 @@ class PttDatabase:
         Session = sessionmaker(bind=self.engine)
         return Session()
 
-    def get_or_create(self, session, model, condition: Dict, values: Dict):
+    def get_or_create(self, session, model, condition: Dict, values: Dict, auto_commit=True):
         instance = session.query(model).filter_by(**condition).first()
         if instance:
             return instance, False
         else:
             instance = model(**values)
             session.add(instance)
-            session.commit()
+            if auto_commit:
+                session.commit()
+            else:
+                session.flush()
             return instance, True
 
-    def create(self, session, model, values: Dict):
+    def create(self, session, model, values: Dict, auto_commit=True):
         instance = model(**values)
         session.add(instance)
-        session.commit()
+        if auto_commit:
+            session.commit()
+        else:
+            session.flush()
         return instance
 
     def get(self, session, model, condition: Dict):
@@ -58,18 +65,27 @@ class PttDatabase:
         ins_list = session.query(model).filter_by(**condition).all()
         return ins_list
 
-    def delete(self, session, model, condition: Dict):
+    def delete(self, session, model, condition: Dict, auto_commit=True):
         session.query(model).filter_by(**condition).delete()
-        session.commit()
+        if auto_commit:
+            session.commit()
+        else:
+            session.flush()
 
-    def bulk_insert(self, session, objects):
+    def bulk_insert(self, session, objects, auto_commit=True):
         session.bulk_save_objects(objects)
-        session.commit()
+        if auto_commit:
+            session.commit()
+        else:
+            session.flush()
 
-    def bulk_update(self, session, model, objects):
+    def bulk_update(self, session, model, objects, auto_commit=True):
         o_list = []
         for o in objects:
             o_list.append(session.merge(model(**o)))
 
         session.add_all(o_list)
-        session.commit()
+        if auto_commit:
+            session.commit()
+        else:
+            session.flush()

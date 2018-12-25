@@ -1,11 +1,13 @@
 from enum import Enum
 
 from .article import PttArticleCrawler
+from .article_index import PttArticleIndexCrawler
 from .asn import PttIpAsnCrawler
 from .user import PttUserCrawler
 
 
 class CrawlerModule(Enum):
-    article = 1
-    asn = 2
-    user = 3
+    article_index = 1
+    article = 2
+    asn = 3
+    user = 4

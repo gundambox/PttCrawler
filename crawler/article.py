@@ -12,8 +12,8 @@ from typing import Dict, List
 import requests
 from bs4 import BeautifulSoup
 
-from models import (Article, ArticleHistory, Board, IpAsn, PttDatabase, Push,
-                    User, UserLastRecord)
+from models import (Article, ArticleHistory, ArticleIndex, Board, IpAsn,
+                    PttDatabase, Push, User, UserLastRecord)
 from utils import load_config, log
 
 from .crawler_arg import add_article_arg_parser, get_base_parser
@@ -23,6 +23,7 @@ class PttArticleCrawler:
 
     PTT_URL = 'https://www.ptt.cc'
     PTT_Board_Format = '/bbs/{board}/index{index}.html'
+    PTT_Article_Format = '/bbs/{board}/{web_id}.html'
     DELAY_TIME = 1.0
     NEXT_PAGE_DELAY_TIME = 5.0
 
@@ -43,10 +44,15 @@ class PttArticleCrawler:
         self.cookies = {'over18': '1'}
 
         self.start_date = arguments['start_date']
-        self.start_index, self.end_index = (arguments['index'] if arguments['index']
-                                            else (1, self.getLastPage(self.board, self.timeout)))
+        self.from_database = arguments['database']
+        if not self.from_database:
+            self.start_index, self.end_index = (arguments['index'] if arguments['index']
+                                                else (1, self.getLastPage(self.board, self.timeout)))
+        else:
+            self.start_index, self.end_index = (0, 0)
         logging.debug('Start date = %s', self.start_date)
         logging.debug('Start = %d, End = %d', self.start_index, self.end_index)
+        logging.debug('From database = %s', str(self.from_database))
 
         self.json_folder = arguments['json_folder']
         self.json_prefix = arguments['json_prefix']
@@ -104,6 +110,7 @@ class PttArticleCrawler:
 
                 return push_ip, push_datetime
             else:
+                logging.warning('push_ipdatetime %s search failed', push_ipdatetime)
                 return None
 
         def parse_author(author):
@@ -111,7 +118,7 @@ class PttArticleCrawler:
             if match:
                 return match.group(1)
             else:
-                return None
+                return author
 
         for record in result:
             author_username = parse_author(record['author'])
@@ -122,10 +129,12 @@ class PttArticleCrawler:
             user, _ = self.db.get_or_create(self.db_session,
                                             User,
                                             author_conditon,
-                                            author_values)
+                                            author_values,
+                                            auto_commit=False)
             board, _ = self.db.get_or_create(self.db_session, Board,
                                              {'name': record['board']},
-                                             {'name': record['board']})
+                                             {'name': record['board']},
+                                             auto_commit=False)
             article, is_new_article = self.db.get_or_create(self.db_session, Article,
                                                             {'web_id': record['article_id']},
                                                             {'web_id': record['article_id'],
@@ -133,12 +142,14 @@ class PttArticleCrawler:
                                                                 'board_id': board.id,
                                                                 'post_datetime': datetime.strptime(record['date'],
                                                                                                    '%a %b %d %H:%M:%S %Y'),
-                                                                'post_ip': record['ip']})
+                                                                'post_ip': record['ip']},
+                                                            auto_commit=False)
             if record['ip']:
                 _, _ = self.db.get_or_create(self.db_session,
                                              IpAsn,
                                              {'ip': record['ip']},
-                                             {'ip': record['ip']})
+                                             {'ip': record['ip']},
+                                             auto_commit=False)
 
             # 1. 新文章
             # 2. 舊文章發生修改
@@ -149,10 +160,8 @@ class PttArticleCrawler:
                                              'title': record['article_title'],
                                              'content': record['content'],
                                              'start_at': datetime.now(),
-                                             'end_at': datetime.now()})
-                if not is_new_article:
-                    self.db.delete(self.db_session, Push, {
-                        'article_history_id': history.id})
+                                             'end_at': datetime.now()},
+                                         auto_commit=False)
             # 舊文章
             else:
                 history = article.history[0]
@@ -162,12 +171,13 @@ class PttArticleCrawler:
             for (floor, message) in enumerate(record['messages']):
                 push_user_condition = {'username': message['push_userid']}
                 push_user_values = {'username': message['push_userid'],
-                                    'login_times': None,
-                                    'valid_article_count': None}
+                                    'login_times': 0,
+                                    'valid_article_count': 0}
                 push_user, _ = self.db.get_or_create(self.db_session,
                                                      User,
                                                      push_user_condition,
-                                                     push_user_values)
+                                                     push_user_values,
+                                                     auto_commit=False)
                 push_ip, push_datetime = parser_push_ipdatetime(
                     message['push_ipdatetime'])
 
@@ -182,13 +192,14 @@ class PttArticleCrawler:
                     _, _ = self.db.get_or_create(self.db_session,
                                                  IpAsn,
                                                  {'ip': push_ip},
-                                                 {'ip': push_ip})
+                                                 {'ip': push_ip},
+                                                 auto_commit=False)
 
-            self.db.bulk_insert(self.db_session, push_list)
+            self.db.bulk_insert(self.db_session, push_list, auto_commit=False)
+            self.db_session.commit()
 
     def parse(self, link, article_id, board, timeout=3):
         """Ref: https://github.com/jwlin/ptt-web-crawler/blob/f8c04076004941d3f7584240c86a95a883ae16de/PttWebCrawler/crawler.py#L99"""
-        print('Processing article:', article_id)
         resp = requests.get(url=link,
                             headers=self.headers,
                             cookies=self.cookies,
@@ -197,7 +208,6 @@ class PttArticleCrawler:
         self.cookies = resp.cookies
         self.cookies['over18'] = '1'
         if resp.status_code != 200:
-            print('invalid url:', resp.url)
             return {"error": "invalid url"}
             # return json.dumps({"error": "invalid url"}, sort_keys=True, ensure_ascii=False)
         soup = BeautifulSoup(resp.text, 'html.parser')
@@ -219,6 +229,19 @@ class PttArticleCrawler:
                 meta.extract()
             for meta in main_content.select('div.article-metaline-right'):
                 meta.extract()
+        else:
+            logging.info('metas is None in link %s', link)
+            transcription = main_content.find(text=re.compile(u'※ 轉錄者:'))
+            if transcription:
+                # 轉錄文章
+                match = re.search(
+                    r'\W(\w+)\W\([0-9]*\.[0-9]*\.[0-9]*\.[0-9]*\),\W([0-9]+\/[0-9]+\/[0-9]+\W[0-9]+:[0-9]+:[0-9]+)', transcription)
+                if match:
+                    author = match.group(1)
+                    date = datetime.strptime(match.group(2), "%m/%d/%Y %H:%M:%S")
+                    date = date.strftime('%a %b %d %H:%M:%S %Y')
+            else:
+                logging.info('Excuse me WTF!?')
 
         # remove and keep push nodes
         pushes = main_content.find_all('div', class_='push')
@@ -229,7 +252,7 @@ class PttArticleCrawler:
             ip = main_content.find(text=re.compile(u'※ 發信站:'))
             ip = re.search('[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*', ip).group()
         except:
-            ip = "None"
+            ip = None
 
         # 移除 '※ 發信站:' (starts with u'\u203b'), '◆ From:' (starts with u'\u25c6'), 空行及多餘空白
         # 保留英數字, 中文及中文標點, 網址, 部分特殊符號
@@ -259,7 +282,7 @@ class PttArticleCrawler:
             # if find is None: find().strings -> list -> ' '.join; else the current way
             push_content = push.find('span', 'push-content').strings
             push_content = ' '.join(push_content)[
-                1:].strip(' \t\n\r')  # remove ':'
+                1:].strip(' \t\n\r')  # remove ':'%a %b %d %H:%M:%S %Y
             push_ipdatetime = push.find(
                 'span', 'push-ipdatetime').string.strip(' \t\n\r')
             messages.append({'push_tag': push_tag, 'push_userid': push_userid,
@@ -291,7 +314,7 @@ class PttArticleCrawler:
             'message_count': message_count,
             'messages': messages
         }
-        # print 'original:', d
+        # print 'original:', data
         return data
         # return json.dumps(data, sort_keys=True, ensure_ascii=False)
 
@@ -314,6 +337,13 @@ class PttArticleCrawler:
 
     @log()
     def crawling(self):
+        if self.from_database:
+            self._crawling_from_db()
+        else:
+            self._crawling_from_arg()
+
+    @log()
+    def _crawling_from_arg(self):
         last_page = self.end_index
 
         while last_page >= self.start_index:
@@ -397,6 +427,35 @@ class PttArticleCrawler:
 
             if self.json_output:
                 self._output_json(article_list, last_page)
+
+    @log()
+    def _crawling_from_db(self):
+        board = self.db.get(self.db_session, Board, {'name': self.board})
+        article_index_list = self.db_session \
+            .query(ArticleIndex) \
+            .filter(ArticleIndex
+                    .web_id.notin_(self.db_session
+                                   .query(Article.web_id)
+                                   .filter(Article.board_id == board.id))).all()
+
+        article_list = []
+        count = 0
+        for article_index in article_index_list:
+            link = self.PTT_URL + \
+                self.PTT_Article_Format.format(board=article_index.board.name,
+                                               web_id=article_index.web_id)
+            logging.debug('Processing Url = %s', link)
+            article_id = article_index.web_id
+            article_list.append(self.parse(link,
+                                           article_id,
+                                           self.board,
+                                           self.timeout))
+            time.sleep(self.DELAY_TIME)
+            count += 1
+            if count == 2:
+                self._output_database(article_list)
+                article_list = []
+                count = 0
 
 
 def parse_args() -> Dict[str, str]:

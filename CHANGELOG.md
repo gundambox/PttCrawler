@@ -1,13 +1,15 @@
 # ChangeLog
 
-## [Unreleased]
-### Add
+## [Unrelease]
+### Added
 - start to use database migration
+- use article_index crawler to fetch the ptt article index and article web_id
+- add new argument in article crawler to fetch ptt article
 
 ## [1.0.1] 2018-12-24
-### Chanage
+### Chanaged
 - 讓排程支援virtualenv
-- 調整文件跟README
+- adjust doc and README
 - Bypass Cloudflare
 
 ## [1.0.0] 2018-12-07

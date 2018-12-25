@@ -36,19 +36,29 @@ def add_article_index_arg_parser(parser: argparse.ArgumentParser):
 
 
 def add_article_arg_parser(parser: argparse.ArgumentParser):
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--start-date',
-                       type=valid_date_type,
-                       help='start datetime in format "YYYY-MM-DD"')
-    group.add_argument('--index',
-                       type=int,
-                       metavar=('START_INDEX', 'END_INDEX'),
-                       nargs=2)
-    group.add_argument('--database',
-                       action='store_true')
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument('--start-date',
+                             type=valid_date_type,
+                             help='start datetime in format "YYYY-MM-DD"')
+    input_group.add_argument('--index',
+                             type=int,
+                             metavar=('START_INDEX', 'END_INDEX'),
+                             nargs=2)
+    input_group.add_argument('--database',
+                             action='store_true')
     parser.add_argument('--board-name',
                         type=str.lower,
                         required=True)
+    action_group = parser.add_mutually_exclusive_group(required=True)
+    action_group.add_argument('--add',
+                              action='store_false',
+                              dest='upgrade',
+                              help="fetch new article, skip existing article")
+    action_group.add_argument('--upgrade',
+                              action='store_true',
+                              dest='upgrade',
+                              help='upgrade existing article version')
+
     # Output
     parser.add_argument('--json-folder',
                         type=str,

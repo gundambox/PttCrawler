@@ -54,6 +54,8 @@ class PttArticleCrawler:
         logging.debug('Start = %d, End = %d', self.start_index, self.end_index)
         logging.debug('From database = %s', str(self.from_database))
 
+        self.upgrade_action = arguments['upgrade']
+
         self.json_folder = arguments['json_folder']
         self.json_prefix = arguments['json_prefix']
 
@@ -98,6 +100,19 @@ class PttArticleCrawler:
                       indent=4,
                       ensure_ascii=False)
 
+    def _output_index_to_database(self, result: List[tuple]):
+        board = self.db.get(self.db_session,
+                            Board,
+                            {'name': self.board})
+        index_list = []
+        for web_id, link, index in result:
+            logging.debug('web_id = %s, link = %s, index = %d, board.id = %d',
+                          web_id, link, index, board.id)
+            index_list.append({'web_id': web_id,
+                               'board_id': board.id,
+                               'index': index})
+        self.db.bulk_update(self.db_session, ArticleIndex, index_list)
+
     @log('Output_Database')
     def _output_database(self, result: List[Dict[str, object]]):
         def parser_push_ipdatetime(push_ipdatetime):
@@ -110,7 +125,8 @@ class PttArticleCrawler:
 
                 return push_ip, push_datetime
             else:
-                logging.warning('push_ipdatetime %s search failed', push_ipdatetime)
+                logging.warning(
+                    'push_ipdatetime %s search failed', push_ipdatetime)
                 return None
 
         def parse_author(author):
@@ -126,6 +142,13 @@ class PttArticleCrawler:
             author_values = {'username': author_username,
                              'login_times': 0,
                              'valid_article_count': 0}
+            if not self.upgrade_action:
+                article = self.db.get(self.db_session,
+                                      Article,
+                                      {'web_id': record['article_id']})
+                if article:
+                    continue
+
             user, _ = self.db.get_or_create(self.db_session,
                                             User,
                                             author_conditon,
@@ -135,6 +158,7 @@ class PttArticleCrawler:
                                              {'name': record['board']},
                                              {'name': record['board']},
                                              auto_commit=False)
+
             article, is_new_article = self.db.get_or_create(self.db_session, Article,
                                                             {'web_id': record['article_id']},
                                                             {'web_id': record['article_id'],
@@ -144,27 +168,25 @@ class PttArticleCrawler:
                                                                                                    '%a %b %d %H:%M:%S %Y'),
                                                                 'post_ip': record['ip']},
                                                             auto_commit=False)
+
             if record['ip']:
                 _, _ = self.db.get_or_create(self.db_session,
                                              IpAsn,
                                              {'ip': record['ip']},
                                              {'ip': record['ip']},
                                              auto_commit=False)
+            if not is_new_article:
+                article.history[0].end_at = datetime.now()
+                self.db_session.flush()
 
-            # 1. 新文章
-            # 2. 舊文章發生修改
-            # => 新增歷史記錄
-            if is_new_article or article.history[0].content != record['content']:
-                history = self.db.create(self.db_session, ArticleHistory,
-                                         {'article_id': article.id,
-                                             'title': record['article_title'],
-                                             'content': record['content'],
-                                             'start_at': datetime.now(),
-                                             'end_at': datetime.now()},
-                                         auto_commit=False)
-            # 舊文章
-            else:
-                history = article.history[0]
+            history = self.db.create(self.db_session,
+                                     ArticleHistory,
+                                     {'article_id': article.id,
+                                      'title': record['article_title'],
+                                      'content': record['content'],
+                                      'start_at': datetime.now(),
+                                      'end_at': datetime.now()},
+                                     auto_commit=False)
 
             # 更新到最近的文章歷史記錄推文
             push_list = []
@@ -238,7 +260,8 @@ class PttArticleCrawler:
                     r'\W(\w+)\W\([0-9]*\.[0-9]*\.[0-9]*\.[0-9]*\),\W([0-9]+\/[0-9]+\/[0-9]+\W[0-9]+:[0-9]+:[0-9]+)', transcription)
                 if match:
                     author = match.group(1)
-                    date = datetime.strptime(match.group(2), "%m/%d/%Y %H:%M:%S")
+                    date = datetime.strptime(
+                        match.group(2), "%m/%d/%Y %H:%M:%S")
                     date = date.strftime('%a %b %d %H:%M:%S %Y')
             else:
                 logging.info('Excuse me WTF!?')
@@ -347,7 +370,6 @@ class PttArticleCrawler:
         last_page = self.end_index
 
         while last_page >= self.start_index:
-            print('Processing index: ', last_page)
             ptt_index_url = (self.PTT_URL +
                              self.PTT_Board_Format).format(board=self.board,
                                                            index=last_page)
@@ -372,29 +394,36 @@ class PttArticleCrawler:
             children = divs.findChildren("div",
                                          recursive=False)
 
-            article_list = []
-
+            article_link_list = []
             for div in children:
                 # ex. link would be <a href="/bbs/PublicServan/M.1127742013.A.240.html">Re: [問題] 職等</a>
-                try:
-                    if 'r-list-sep' in div['class']:
-                        break
-                    elif 'r-ent' in div['class']:
+                if 'r-list-sep' in div['class']:
+                    break
+                elif 'r-ent' in div['class']:
+                    try:
                         href = div.find('a')['href']
                         link = self.PTT_URL + href
                         article_id = re.sub(
                             '\.html', '', href.split('/')[-1])
+                        article_link_list.append((article_id, link, last_page))
+                    except Exception as e:
+                        logging.exception(
+                            'Processing article error, Url = %s', link)
+                else:
+                    continue
+            self._output_index_to_database(article_link_list)
 
-                        logging.debug('Processing article: %s, Url = %s',
-                                      article_id, link)
+            article_list = []
+            for article_id, link, _ in article_link_list:
+                try:
+                    logging.debug('Processing article: %s, Url = %s',
+                                  article_id, link)
 
-                        article_list.append(self.parse(link,
-                                                       article_id,
-                                                       self.board,
-                                                       self.timeout))
-                        time.sleep(self.DELAY_TIME)
-                    else:
-                        continue
+                    article_list.append(self.parse(link,
+                                                   article_id,
+                                                   self.board,
+                                                   self.timeout))
+                    time.sleep(self.DELAY_TIME)
                 except Exception as e:
                     logging.exception(
                         'Processing article error, Url = %s', link)
@@ -422,21 +451,28 @@ class PttArticleCrawler:
             if self.database_output:
                 self._output_database(article_list)
 
-            last_page -= 1
-            time.sleep(self.NEXT_PAGE_DELAY_TIME)
-
             if self.json_output:
                 self._output_json(article_list, last_page)
+
+            last_page -= 1
+            time.sleep(self.NEXT_PAGE_DELAY_TIME)
 
     @log()
     def _crawling_from_db(self):
         board = self.db.get(self.db_session, Board, {'name': self.board})
-        article_index_list = self.db_session \
-            .query(ArticleIndex) \
-            .filter(ArticleIndex
-                    .web_id.notin_(self.db_session
-                                   .query(Article.web_id)
-                                   .filter(Article.board_id == board.id))).all()
+
+        exist_article_list = self.db_session \
+            .query(Article.web_id) \
+            .filter(Article.board_id == board.id).all()
+
+        if self.upgrade_action:
+            article_index_list = self.db_session \
+                .query(ArticleIndex)\
+                .filter(Article.board_id == board.id).all()
+        else:
+            article_index_list = self.db_session \
+                .query(ArticleIndex) \
+                .filter(ArticleIndex.web_id.notin_(exist_article_list)).all()
 
         article_list = []
         count = 0
@@ -452,7 +488,7 @@ class PttArticleCrawler:
                                            self.timeout))
             time.sleep(self.DELAY_TIME)
             count += 1
-            if count == 2:
+            if count == 20:
                 self._output_database(article_list)
                 article_list = []
                 count = 0

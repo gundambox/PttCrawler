@@ -115,7 +115,7 @@ VersionRotate = 30
     * --board-name
         - 看板名稱
     * --start-date, --index, --database
-        - --start-date: 從最新文章往前爬娶到特定時間的文章
+        - --start-date: 從最新文章往前爬取到特定時間的文章
         - --index: 爬取從START_INDEX到END_INDEX之間的文章
         - --database: 爬取DB中有紀錄索引的文章
     * --add, --upgrade
@@ -134,7 +134,7 @@ VersionRotate = 30
     利用term.ptt.cc爬取上站紀錄、登入次數、有效文章
 
     ```bash
-    python -m crawler user (--database | --id IID) [--config-path CONFIG_PATH]
+    python -m crawler user (--database | --id ID) [--config-path CONFIG_PATH]
     ```
 
 4. PTT 查Ip Autonomous System Number
@@ -178,10 +178,6 @@ python export.py --format {ods, csv} --output-folder OUTPUT_FOLDER [--output-pre
     ```bash
     python schedule.py remove {article_index, article, asn, user} --args ARGS
     ```
-
-## Todo
-
-None
 
 ## 檔案結構
 

@@ -106,7 +106,7 @@ Output = both
 3. PTT User last login record
 
     ```bash
-    python -m crawler user (--database | --id IID) [--config-path CONFIG_PATH]
+    python -m crawler user (--database | --id ID) [--config-path CONFIG_PATH]
     ```
 
 4. PTT Ip autonomous system number
@@ -134,10 +134,6 @@ python schedule.py update {article, asn, user} -c CYCLE_TIME [-s START_DATETIME]
 ```bash
 python schedule.py remove {article, asn, user}
 ```
-
-## Todo
-
-None
 
 ## Architecture
 

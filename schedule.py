@@ -26,9 +26,10 @@ class ScheduleAction(Enum):
 
 
 class CrawlerModule(Enum):
-    article = 1
-    asn = 2
-    user = 3
+    article_index = 1
+    article = 2
+    asn = 3
+    user = 4
 
     def __str__(self):
         return self.name
@@ -75,16 +76,19 @@ class ScheduleHelper(object):
             is_venv = arguments['virtualenv']
             jobs = list(cron.find_command(str(crawler_module)))
 
+            cmd_args = arguments['args']
+            jobs = [job for job in jobs if cmd_args in (job.command)]
+
             cwd = os.getcwd()
             wrapper_path = os.path.join(cwd, 'env_wrapper.sh')
 
-            module_command = '{wrapper_path} "{cwd}" "{env}" -m crawler {module} --database >/dev/null 2>&1'.format(
+            module_command = '{wrapper_path} "{cwd}" "{env}" -m crawler {module} {args} >/dev/null 2>&1'.format(
                 wrapper_path=wrapper_path,
                 cwd=cwd,
                 env=is_venv,
-                module=crawler_module)
-            print(module_command)
-            return
+                module=crawler_module,
+                args=str(cmd_args))
+
             if len(jobs) > 0:
                 job = jobs[0]
                 job.set_command(module_command)
@@ -142,11 +146,15 @@ def parse_argument():
                                   type=valid_datetime_type,
                                   default=datetime.now()+timedelta(minutes=1),
                                   help='start datetime in format "YYYY-MM-DD HH:mm"')
+    update_subparser.add_argument('--args', type=str,
+                                  required=True)
 
     remove_subparser = subparsers.add_parser('remove')
     remove_subparser.add_argument(dest='crawler_module',
                                   type=CrawlerModule.from_string,
                                   choices=list(CrawlerModule))
+    remove_subparser.add_argument('--args', type=str,
+                                  required=True)
 
     args = parser.parse_args()
     arguments = vars(args)

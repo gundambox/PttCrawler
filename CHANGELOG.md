@@ -6,6 +6,8 @@
 - use article_index crawler to fetch the ptt article index and article web_id
 - add new argument in article crawler to fetch ptt article
 - article_history rotation
+### Fixed
+- schedule.py bug
 
 ## [1.0.1] 2018-12-24
 ### Chanaged

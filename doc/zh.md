@@ -157,53 +157,70 @@ python export.py --format {ods, csv} --output-folder OUTPUT_FOLDER [--output-pre
 
 1. Update
 
-```bash
-python schedule.py update {article, asn, user} -c CYCLE_TIME [-s START_DATETIME] [--virtualenv VIRTUALENV_PATH]
-```
+    - --args
+        * crawler的參數
+        * 例如: `python schedule.py update article_index --args "--board-name Gossiping" -c 1`
+    - -c
+        * 循環天數間隔
+
+    ```bash
+    python schedule.py update {article_index, article, asn, user} \
+        --args ARGS
+        -c CYCLE_TIME [-s START_DATETIME] [--virtualenv VIRTUALENV_PATH]
+    ```
 
 2. Remove
 
-```bash
-python schedule.py remove {article, asn, user}
-```
+    - --args
+        * crawler的參數
+        * 例如: `python schedule.py remove article_index --args "--board-name GUNDAM"`
+
+    ```bash
+    python schedule.py remove {article_index, article, asn, user} --args ARGS
+    ```
 
 ## Todo
 
-- [ ] PttArticleCrawler的`crawling`方法要分為兩個，一個負責抓取`index`跟`web_id`，一個負責抓取與`web_id`對應的文章
-- [ ] 記錄上次執行結果，避免從頭開始跑
+None
 
 ## 檔案結構
 
 ```
 PttCrawler/
-|- utils.py
-|- export.py
-|- query.py
-|- schedule.py
-|- config_example.ini
-|- models/
-|   |- __init__.py
-|   |- article.py
-|   |- asn.py
-|   |- base.py
-|   `- user.py
-|- crawler/
-|   |- __init__.py
-|   |- __main__.py
-|   |- article.py
-|   |- asn.py
-|   |- crawler_arg.py
-|   |- user.py
-|- webdriver/
-|   |- windows/
-|   |   `- chromedriver.exe
-|   |- linux/
-|   |   `- chromedriver
-|   `- mac/
-|       `- chromedriver
-|- requirements.txt
-|- env_wrapper.sh
-|- CHANGELOG.md
-|- README.md
-`- README_ZH.md
+├── CHANGELOG.md
+├── config_example.ini
+├── crawler/
+│   ├── __init__.py
+│   ├── __main__.py
+│   ├── crawler_arg.py
+│   ├── article_index.py
+│   ├── article.py
+│   ├── asn.py
+│   └── user.py
+├── db_migration/
+│   ├── env.py
+│   ├── README
+│   ├── script.py.mako
+│   └── versions/
+│       ├── 77eaebfa8062_create_initial_table.py
+│       ├── 64f93945c28a_edit_article_table.py
+│       └── 6794412e2720_edit_article_history_on_delete_actions.py
+├── doc/
+│   ├── img/
+│   ├── en.md
+│   └── zh.md
+├── models/
+│   ├── __init__.py
+│   ├── base.py
+│   ├── article.py
+│   ├── asn.py
+│   └── user.py
+│── webdriver/
+├── env_wrapper.sh
+├── export.py
+├── query.py
+├── schedule.py
+├── utils.py
+├── requirements.txt
+└── README.md
 ```

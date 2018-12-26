@@ -190,7 +190,14 @@ class PttUserCrawler(object):
                 _, _ = self.db.get_or_create(self.db_session,
                                              IpAsn,
                                              {'ip': record['last_login_ip']},
-                                             {'ip': record['last_login_ip']})
+                                             {'ip': record['last_login_ip'],
+                                              'asn': None,
+                                              'asn_cidr': None,
+                                              'asn_country_code': None,
+                                              'asn_date': None,
+                                              'asn_description': None,
+                                              'asn_raw': None,
+                                              'asn_registry': None})
 
             self.db_session.add(last_record)
             self.db_session.commit()

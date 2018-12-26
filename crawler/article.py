@@ -70,6 +70,7 @@ class PttArticleCrawler:
         self.DELAY_TIME = float(self.article_config['Delaytime'])
         self.NEXT_PAGE_DELAY_TIME = float(
             self.article_config['NextPageDelaytime'])
+        self.VERSION_ROTATE = int(self.article_config['VersionRotate']) or 30
 
         self.json_output = False
         self.database_output = False
@@ -116,109 +117,137 @@ class PttArticleCrawler:
     @log('Output_Database')
     def _output_database(self, result: List[Dict[str, object]]):
         def parser_push_ipdatetime(push_ipdatetime):
-            match = re.search(
-                r'([\d.]*)\W?(\d{2}\/\d{2}\ \d{2}:\d{2})', push_ipdatetime)
-            if match:
-                push_ip = match.group(1)
-                push_datetime = datetime.strptime(
-                    match.group(2), "%m/%d %M:%S")
+            if push_ipdatetime:
+                match = re.search(
+                    r'([\d.]*)\W?(\d{2}\/\d{2}\ \d{2}:\d{2})', push_ipdatetime)
+                if match:
+                    push_ip = match.group(1)
+                    push_datetime = datetime.strptime(
+                        match.group(2), "%m/%d %M:%S")
 
-                return push_ip, push_datetime
-            else:
-                logging.warning(
-                    'push_ipdatetime %s search failed', push_ipdatetime)
-                return None
+                    return push_ip, push_datetime
+            logging.warning(
+                'push_ipdatetime %s search failed', push_ipdatetime)
+            return None
 
         def parse_author(author):
-            match = re.search(r'([\S]*)\D\((.*)\)', author)
-            if match:
-                return match.group(1)
-            else:
-                return author
+            if author:
+                match = re.search(r'([\S]*)\D\((.*)\)', author)
+                if match:
+                    return match.group(1)
+            return author
 
         for record in result:
-            author_username = parse_author(record['author'])
-            author_conditon = {'username': author_username}
-            author_values = {'username': author_username,
-                             'login_times': 0,
-                             'valid_article_count': 0}
-            if not self.upgrade_action:
-                article = self.db.get(self.db_session,
-                                      Article,
-                                      {'web_id': record['article_id']})
-                if article:
-                    continue
+            try:
+                author_username = parse_author(record['author'])
+                author_conditon = {'username': author_username}
+                author_values = {'username': author_username,
+                                 'login_times': 0,
+                                 'valid_article_count': 0}
+                if not self.upgrade_action:
+                    article = self.db.get(self.db_session,
+                                          Article,
+                                          {'web_id': record['article_id']})
+                    if article:
+                        continue
 
-            user, _ = self.db.get_or_create(self.db_session,
-                                            User,
-                                            author_conditon,
-                                            author_values,
-                                            auto_commit=False)
-            board, _ = self.db.get_or_create(self.db_session, Board,
-                                             {'name': record['board']},
-                                             {'name': record['board']},
-                                             auto_commit=False)
-
-            article, is_new_article = self.db.get_or_create(self.db_session, Article,
-                                                            {'web_id': record['article_id']},
-                                                            {'web_id': record['article_id'],
-                                                                'user_id': user.id,
-                                                                'board_id': board.id,
-                                                                'post_datetime': datetime.strptime(record['date'],
-                                                                                                   '%a %b %d %H:%M:%S %Y'),
-                                                                'post_ip': record['ip']},
-                                                            auto_commit=False)
-
-            if record['ip']:
-                _, _ = self.db.get_or_create(self.db_session,
-                                             IpAsn,
-                                             {'ip': record['ip']},
-                                             {'ip': record['ip']},
-                                             auto_commit=False)
-            if not is_new_article:
-                article.history[0].end_at = datetime.now()
-                self.db_session.flush()
-
-            history = self.db.create(self.db_session,
-                                     ArticleHistory,
-                                     {'article_id': article.id,
-                                      'title': record['article_title'],
-                                      'content': record['content'],
-                                      'start_at': datetime.now(),
-                                      'end_at': datetime.now()},
-                                     auto_commit=False)
-
-            # 更新到最近的文章歷史記錄推文
-            push_list = []
-            for (floor, message) in enumerate(record['messages']):
-                push_user_condition = {'username': message['push_userid']}
-                push_user_values = {'username': message['push_userid'],
-                                    'login_times': 0,
-                                    'valid_article_count': 0}
-                push_user, _ = self.db.get_or_create(self.db_session,
-                                                     User,
-                                                     push_user_condition,
-                                                     push_user_values,
-                                                     auto_commit=False)
-                push_ip, push_datetime = parser_push_ipdatetime(
-                    message['push_ipdatetime'])
-
-                push_list.append(Push(article_history_id=history.id,
-                                      floor=(floor+1),
-                                      push_tag=message['push_tag'],
-                                      push_user_id=push_user.id,
-                                      push_content=message['push_content'],
-                                      push_ip=push_ip,
-                                      push_datetime=push_datetime))
-                if push_ip:
-                    _, _ = self.db.get_or_create(self.db_session,
-                                                 IpAsn,
-                                                 {'ip': push_ip},
-                                                 {'ip': push_ip},
+                user, _ = self.db.get_or_create(self.db_session,
+                                                User,
+                                                author_conditon,
+                                                author_values,
+                                                auto_commit=False)
+                board, _ = self.db.get_or_create(self.db_session, Board,
+                                                 {'name': record['board']},
+                                                 {'name': record['board']},
                                                  auto_commit=False)
 
-            self.db.bulk_insert(self.db_session, push_list, auto_commit=False)
-            self.db_session.commit()
+                article, is_new_article = self.db.get_or_create(self.db_session, Article,
+                                                                {'web_id': record['article_id']},
+                                                                {'web_id': record['article_id'],
+                                                                    'user_id': user.id,
+                                                                    'board_id': board.id,
+                                                                    'post_datetime': datetime.strptime(record['date'],
+                                                                                                       '%a %b %d %H:%M:%S %Y'),
+                                                                    'post_ip': record['ip']},
+                                                                auto_commit=False)
+
+                if record['ip']:
+                    _, _ = self.db.get_or_create(self.db_session,
+                                                 IpAsn,
+                                                 {'ip': record['ip']},
+                                                 {'ip': record['ip'],
+                                                  'asn': None,
+                                                  'asn_cidr': None,
+                                                  'asn_country_code': None,
+                                                  'asn_date': None,
+                                                  'asn_description': None,
+                                                  'asn_raw': None,
+                                                  'asn_registry': None},
+                                                 auto_commit=False)
+                if not is_new_article:
+                    article.history[0].end_at = datetime.now()
+                    self.db_session.flush()
+
+                history = self.db.create(self.db_session,
+                                         ArticleHistory,
+                                         {'article_id': article.id,
+                                          'title': record['article_title'],
+                                          'content': record['content'],
+                                          'start_at': datetime.now(),
+                                          'end_at': datetime.now()},
+                                         auto_commit=False)
+
+                # 更新到最近的文章歷史記錄推文
+                push_list = []
+                for (floor, message) in enumerate(record['messages']):
+                    push_user_condition = {'username': message['push_userid']}
+                    push_user_values = {'username': message['push_userid'],
+                                        'login_times': 0,
+                                        'valid_article_count': 0}
+                    push_user, _ = self.db.get_or_create(self.db_session,
+                                                         User,
+                                                         push_user_condition,
+                                                         push_user_values,
+                                                         auto_commit=False)
+                    push_ip, push_datetime = parser_push_ipdatetime(
+                        message['push_ipdatetime'])
+
+                    push_list.append(Push(article_history_id=history.id,
+                                          floor=(floor+1),
+                                          push_tag=message['push_tag'],
+                                          push_user_id=push_user.id,
+                                          push_content=message['push_content'],
+                                          push_ip=push_ip,
+                                          push_datetime=push_datetime))
+                    if push_ip:
+                        _, _ = self.db.get_or_create(self.db_session,
+                                                     IpAsn,
+                                                     {'ip': push_ip},
+                                                     {'ip': push_ip,
+                                                      'asn': None,
+                                                      'asn_cidr': None,
+                                                      'asn_country_code': None,
+                                                      'asn_date': None,
+                                                      'asn_description': None,
+                                                      'asn_raw': None,
+                                                      'asn_registry': None},
+                                                     auto_commit=False)
+
+                self.db.bulk_insert(
+                    self.db_session, push_list, auto_commit=False)
+
+                article = self.db.get(self.db_session,
+                                      Article,
+                                      {'id': article.id})
+
+                if len(article.history) >= self.VERSION_ROTATE:
+                    for h in article.history[self.VERSION_ROTATE:]:
+                        self.db_session.delete(h)
+                    self.db_session.flush()
+
+                self.db_session.commit()
+            except:
+                logging.exception('record = %s', record)
 
     def parse(self, link, article_id, board, timeout=3):
         """Ref: https://github.com/jwlin/ptt-web-crawler/blob/f8c04076004941d3f7584240c86a95a883ae16de/PttWebCrawler/crawler.py#L99"""
@@ -368,7 +397,7 @@ class PttArticleCrawler:
     @log()
     def _crawling_from_arg(self):
         last_page = self.end_index
-
+        board = self.db.get(self.db_session, Board, {'name': self.board})
         while last_page >= self.start_index:
             ptt_index_url = (self.PTT_URL +
                              self.PTT_Board_Format).format(board=self.board,
@@ -413,46 +442,54 @@ class PttArticleCrawler:
                     continue
             self._output_index_to_database(article_link_list)
 
-            article_list = []
-            for article_id, link, _ in article_link_list:
-                try:
-                    logging.debug('Processing article: %s, Url = %s',
-                                  article_id, link)
+            page_article_count = self.db_session.query(ArticleIndex) \
+                .join(Article, Article.web_id == ArticleIndex.web_id) \
+                .filter(ArticleIndex.board_id == board.id, ArticleIndex.index == last_page)\
+                .count()
 
-                    article_list.append(self.parse(link,
-                                                   article_id,
-                                                   self.board,
-                                                   self.timeout))
-                    time.sleep(self.DELAY_TIME)
-                except Exception as e:
-                    logging.exception(
-                        'Processing article error, Url = %s', link)
-
-            len_article_list = len(article_list)
-            if self.start_date:
-                tmp_article_list = []
-                for article in article_list:
+            if not self.upgrade_action and page_article_count == len(article_link_list):
+                pass
+            else:
+                article_list = []
+                for article_id, link, _ in article_link_list:
                     try:
-                        aritcle_date = datetime.strptime(article['date'],
-                                                         '%a %b %d %H:%M:%S %Y')
-                        if self.start_date <= aritcle_date:
-                            tmp_article_list.append(article)
+                        logging.info('Processing article: %s, Url = %s',
+                                     article_id, link)
+
+                        article_list.append(self.parse(link,
+                                                       article_id,
+                                                       self.board,
+                                                       self.timeout))
+                        time.sleep(self.DELAY_TIME)
                     except Exception as e:
-                        # 避免因為原文的日期被砍，導致無法繼續處理
-                        len_article_list -= 1
-                        logging.error('%s', e)
-                        logging.error('article: %s , date format: %s',
-                                      article['article_id'], article['date'])
+                        logging.exception(
+                            'Processing article error, Url = %s', link)
 
-                if len(tmp_article_list) < len_article_list:
-                    self.start_index = last_page
-                    article_list = tmp_article_list
+                len_article_list = len(article_list)
+                if self.start_date:
+                    tmp_article_list = []
+                    for article in article_list:
+                        try:
+                            aritcle_date = datetime.strptime(article['date'],
+                                                             '%a %b %d %H:%M:%S %Y')
+                            if self.start_date <= aritcle_date:
+                                tmp_article_list.append(article)
+                        except Exception as e:
+                            # 避免因為原文的日期被砍，導致無法繼續處理
+                            len_article_list -= 1
+                            logging.error('%s', e)
+                            logging.error('article: %s , date format: %s',
+                                          article['article_id'], article['date'])
 
-            if self.database_output:
-                self._output_database(article_list)
+                    if len(tmp_article_list) < len_article_list:
+                        self.start_index = last_page
+                        article_list = tmp_article_list
 
-            if self.json_output:
-                self._output_json(article_list, last_page)
+                if self.database_output:
+                    self._output_database(article_list)
+
+                if self.json_output:
+                    self._output_json(article_list, last_page)
 
             last_page -= 1
             time.sleep(self.NEXT_PAGE_DELAY_TIME)

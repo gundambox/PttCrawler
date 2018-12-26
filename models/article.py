@@ -1,5 +1,5 @@
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, Sequence, String
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 
 from . import Base
 
@@ -50,7 +50,7 @@ class Article(Base):
     user = relationship("User", backref="Article")
     board = relationship("Board", backref="Article")
     history = relationship("ArticleHistory", backref="Article",
-                           order_by="desc(ArticleHistory.end_at)")
+                           order_by="desc(ArticleHistory.start_at)")
 
     def __repr__(self):
         return '<Article(id={id}, \
@@ -83,7 +83,8 @@ class ArticleHistory(Base):
     end_at = Column(DateTime,
                     nullable=False)
 
-    article = relationship("Article", backref="ArticleHistory")
+    article = relationship(
+        "Article", backref="ArticleHistory")
     push_list = relationship("Push", backref="ArticleHistory",
                              order_by="desc(Push.push_datetime)")
 
@@ -109,7 +110,8 @@ class Push(Base):
                 Sequence('push_id_seq'),
                 primary_key=True)
     article_history_id = Column(Integer,
-                                ForeignKey('article_history.id'),
+                                ForeignKey('article_history.id',
+                                           ondelete='CASCADE'),
                                 nullable=False)
     floor = Column(Integer,
                    nullable=False)
@@ -124,5 +126,8 @@ class Push(Base):
                      nullable=True)
     push_datetime = Column(DateTime,
                            nullable=False)
-    article_history = relationship("ArticleHistory", backref="Push")
+    article_history = relationship("ArticleHistory",
+                                   backref=backref("Push", cascade='all,delete'))
+    # article_history = relationship("ArticleHistory",
+    #                                backref=backref("Push", passive_deletes=True))
     user = relationship("User", backref="Push")

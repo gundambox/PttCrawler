@@ -80,29 +80,40 @@ NextPageDelaytime = 10.0
 Timeout = 10
 # Choices = {database, json, both}
 Output = both
+# The article history keeps at most 30 versions.
 ```
 
 ## Usage
 
 ### Crawler
 
-1. PTT Article
+1. PTT Article index
 
-```bash
-python -m crawler article (--start-date | --index START_INDEX END_INDEX) [--config-path CONFIG_PATH]
-```
+    ```bash
+    python -m crawler article_index --board-name BOARD_NAME \
+        [--before | --after] [--index INDEX]                 
+    ```
 
-2. PTT User last login record
+2. PTT Article
 
-```bash
-python -m crawler user (--database | --ip IP) [--config-path CONFIG_PATH]
-```
+    ```bash
+    python -m crawler article --board-name BOARD_NAME \
+        (--start-date | --index START_INDEX END_INDEX | --database) \
+        (--add | --upgrade) \
+        [--config-path CONFIG_PATH]
+    ```
 
-3. PTT Ip autonomous system number
+3. PTT User last login record
 
-```bash
-python -m crawler asn (--database | --id ID) [--config-path CONFIG_PATH]
-```
+    ```bash
+    python -m crawler user (--database | --id IID) [--config-path CONFIG_PATH]
+    ```
+
+4. PTT Ip autonomous system number
+
+    ```bash
+    python -m crawler asn (--database | --ip IP) [--config-path CONFIG_PATH]
+    ```
 
 ### Export
 

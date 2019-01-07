@@ -1,23 +1,7 @@
 from datetime import datetime
 from sqlalchemy import Column, DateTime, String
 
-from . import Base
-
-
-class MyDateTime(DateTime):
-    def __init__(self, timezone=False):
-        super().__init__(timezone)
-
-    def result_processor(self, dialect, coltype):
-        def process(value):
-            if value is not None:
-                return value
-            else:
-                return None
-        return process
-
-    def adapt(self, impltype, **kw):
-        return MyDateTime(self.timezone)
+from . import Base, MyDateTime
 
 
 class IpAsn(Base):

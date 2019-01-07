@@ -1,7 +1,9 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Sequence, String
-from sqlalchemy.orm import relationship, backref
+import datetime
 
-from . import Base
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, Sequence, String
+from sqlalchemy.orm import backref, relationship
+
+from . import Base, MyDateTime
 
 
 class Board(Base):
@@ -42,8 +44,8 @@ class Article(Base):
     board_id = Column(Integer,
                       ForeignKey('board.id'),
                       nullable=False)
-    post_datetime = Column(DateTime(),
-                           nullable=False)
+    post_datetime = Column(MyDateTime,
+                           nullable=True)
     post_ip = Column(String(20),
                      nullable=True)
 
@@ -79,9 +81,11 @@ class ArticleHistory(Base):
     content = Column(String,
                      nullable=False)
     start_at = Column(DateTime,
-                      nullable=False)
+                      nullable=False,
+                      default=datetime.datetime.now)
     end_at = Column(DateTime,
-                    nullable=False)
+                    nullable=False,
+                    default=datetime.datetime.now)
 
     article = relationship(
         "Article", backref="ArticleHistory")
@@ -124,8 +128,8 @@ class Push(Base):
                           nullable=False)
     push_ip = Column(String(40),
                      nullable=True)
-    push_datetime = Column(DateTime,
-                           nullable=False)
+    push_datetime = Column(MyDateTime,
+                           nullable=True)
     article_history = relationship("ArticleHistory",
                                    backref=backref("Push", cascade='all,delete'))
     # article_history = relationship("ArticleHistory",

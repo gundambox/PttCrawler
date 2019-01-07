@@ -50,9 +50,7 @@ class PttArticleCrawler:
                                                 else (1, self.getLastPage(self.board, self.timeout)))
         else:
             self.start_index, self.end_index = (0, 0)
-        logging.debug('Start date = %s', self.start_date)
-        logging.debug('Start = %d, End = %d', self.start_index, self.end_index)
-        logging.debug('From database = %s', str(self.from_database))
+        
 
         self.upgrade_action = arguments['upgrade']
 
@@ -102,9 +100,11 @@ class PttArticleCrawler:
                       ensure_ascii=False)
 
     def _output_index_to_database(self, result: List[tuple]):
-        board = self.db.get(self.db_session,
-                            Board,
-                            {'name': self.board})
+        board, _ = self.db.get_or_create(self.db_session, Board, {
+                                         'name': self.board}, {'name': self.board})
+        # board = self.db.get(self.db_session,
+        #                     Board,
+        #                     {'name': self.board})
         index_list = []
         for web_id, link, index in result:
             logging.debug('web_id = %s, link = %s, index = %d, board.id = %d',
@@ -117,6 +117,7 @@ class PttArticleCrawler:
     @log('Output_Database')
     def _output_database(self, result: List[Dict[str, object]]):
         def parser_push_ipdatetime(push_ipdatetime):
+            logging.debug('parser_push_ipdatetime(%s)', push_ipdatetime)
             if push_ipdatetime:
                 match = re.search(
                     r'([\d.]*)\W?(\d{2}\/\d{2}\ \d{2}:\d{2})', push_ipdatetime)
@@ -128,9 +129,10 @@ class PttArticleCrawler:
                     return push_ip, push_datetime
             logging.warning(
                 'push_ipdatetime %s search failed', push_ipdatetime)
-            return None
+            return None, None
 
         def parse_author(author):
+            logging.debug('parse_author(%s)', parse_author)
             if author:
                 match = re.search(r'([\S]*)\D\((.*)\)', author)
                 if match:
@@ -140,6 +142,9 @@ class PttArticleCrawler:
         for record in result:
             try:
                 author_username = parse_author(record['author'])
+                if not author_username:
+                    logging.warning('author is empty, record = %s', record)
+                    author_username = ''
                 author_conditon = {'username': author_username}
                 author_values = {'username': author_username,
                                  'login_times': 0,
@@ -200,8 +205,12 @@ class PttArticleCrawler:
                 # 更新到最近的文章歷史記錄推文
                 push_list = []
                 for (floor, message) in enumerate(record['messages']):
-                    push_user_condition = {'username': message['push_userid']}
-                    push_user_values = {'username': message['push_userid'],
+                    push_userid = message['push_userid']
+                    if not push_userid:
+                        logging.warning('push_userid is empty, message = %s', message)
+                        push_userid = ''
+                    push_user_condition = {'username': push_userid}
+                    push_user_values = {'username': push_userid,
                                         'login_times': 0,
                                         'valid_article_count': 0}
                     push_user, _ = self.db.get_or_create(self.db_session,
@@ -328,15 +337,12 @@ class PttArticleCrawler:
         for push in pushes:
             if not push.find('span', 'push-tag'):
                 continue
-            push_tag = push.find('span', 'push-tag').string.strip(' \t\n\r')
-            push_userid = push.find(
-                'span', 'push-userid').string.strip(' \t\n\r')
+            push_tag = (push.find('span', 'push-tag').string or '').strip(' \t\n\r')
+            push_userid = (push.find('span', 'push-userid').string or '').strip(' \t\n\r')
             # if find is None: find().strings -> list -> ' '.join; else the current way
             push_content = push.find('span', 'push-content').strings
-            push_content = ' '.join(push_content)[
-                1:].strip(' \t\n\r')  # remove ':'%a %b %d %H:%M:%S %Y
-            push_ipdatetime = push.find(
-                'span', 'push-ipdatetime').string.strip(' \t\n\r')
+            push_content = (' '.join(push_content)[1:]).strip(' \t\n\r')  # remove ':'%a %b %d %H:%M:%S %Y
+            push_ipdatetime = (push.find('span', 'push-ipdatetime').string or '').strip(' \t\n\r')
             messages.append({'push_tag': push_tag, 'push_userid': push_userid,
                              'push_content': push_content, 'push_ipdatetime': push_ipdatetime})
             if push_tag == u'推':
@@ -389,6 +395,9 @@ class PttArticleCrawler:
 
     @log()
     def crawling(self):
+        logging.debug('Start date = %s', self.start_date)
+        logging.debug('Start = %d, End = %d', self.start_index, self.end_index)
+        logging.debug('From database = %s', str(self.from_database))
         if self.from_database:
             self._crawling_from_db()
         else:
@@ -397,7 +406,8 @@ class PttArticleCrawler:
     @log()
     def _crawling_from_arg(self):
         last_page = self.end_index
-        board = self.db.get(self.db_session, Board, {'name': self.board})
+        board, _ = self.db.get_or_create(self.db_session, Board, {
+                                         'name': self.board}, {'name': self.board})
         while last_page >= self.start_index:
             ptt_index_url = (self.PTT_URL +
                              self.PTT_Board_Format).format(board=self.board,
@@ -436,8 +446,7 @@ class PttArticleCrawler:
                             '\.html', '', href.split('/')[-1])
                         article_link_list.append((article_id, link, last_page))
                     except Exception as e:
-                        logging.exception(
-                            'Processing article error, Url = %s', link)
+                        logging.warning('%s href 404', div)
                 else:
                     continue
             self._output_index_to_database(article_link_list)
@@ -496,7 +505,8 @@ class PttArticleCrawler:
 
     @log()
     def _crawling_from_db(self):
-        board = self.db.get(self.db_session, Board, {'name': self.board})
+        board, _ = self.db.get_or_create(self.db_session, Board, {
+                                         'name': self.board}, {'name': self.board})
 
         exist_article_list = self.db_session \
             .query(Article.web_id) \

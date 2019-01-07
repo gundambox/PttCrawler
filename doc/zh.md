@@ -51,6 +51,12 @@ cp config_example.ini config.ini
 
 ![img1](img/6.PNG)
 
+6. 更新 SQLite 資料庫
+
+```bash
+alembic upgrade head
+```
+
 ## 設定
 
 ```ini

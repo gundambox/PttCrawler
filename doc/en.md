@@ -51,6 +51,12 @@ cp config_example.ini config.ini
 
 ![img1](img/6.PNG)
 
+6. Upgrade SQLite Database
+
+```bash
+alembic upgrade head
+```
+
 ## Configuration
 
 ```ini

@@ -123,8 +123,10 @@ Output = both
 
 ### Export
 
+Export in file with ods, csv or json file format
+
 ```bash
-python export.py --format {ods, csv} --output-folder OUTPUT_FOLDER [--output-prefix OUTPUT_PREFIX]
+python export.py --format {ods, csv, json} --output-folder OUTPUT_FOLDER [--output-prefix OUTPUT_PREFIX]
 ```
 
 ### Schedule

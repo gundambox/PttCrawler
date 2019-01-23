@@ -135,3 +135,20 @@ class Push(Base):
     # article_history = relationship("ArticleHistory",
     #                                backref=backref("Push", passive_deletes=True))
     user = relationship("User", backref="Push")
+
+    def __repr__(self):
+        return '<Article(id={id}, \
+article_history_id={article_history_id}, \
+floor={floor}, \
+push_tag={push_tag}, \
+push_user_id={push_user_id}, \
+push_content={push_content}, \
+push_ip={push_ip}, \
+push_datetime={push_datetime})>'.format(id=self.id,
+                                        article_history_id=self.article_history_id,
+                                        floor=self.floor,
+                                        push_tag=self.push_tag,
+                                        push_user_id=self.push_user_id,
+                                        push_content=self.push_content,
+                                        push_ip=self.push_ip,
+                                        push_datetime=self.push_datetime)

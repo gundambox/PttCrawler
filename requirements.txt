@@ -1,6 +1,8 @@
 alembic==1.0.3
+beautifulsoup4==4.6.3
 ipwhois==1.0.0
 pyexcel-ods==0.5.3
 python-crontab==2.3.5
+requests==2.20.1
 selenium==3.141.0
 SQLAlchemy==1.2.14

@@ -75,7 +75,7 @@ class QueryHelper(object):
                               dbname=self.config['Database']['Name'])
         self.db_session = self.db.get_session()
 
-    @log
+    @log()
     def _get_export_rows(self):
         rows = [['Type', 'Board', 'Start date',
                  'End date', 'TW Ip', 'Not TW Ip']]

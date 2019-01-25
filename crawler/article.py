@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup
 
 from models import (Article, ArticleHistory, ArticleIndex, Board, IpAsn,
                     PttDatabase, Push, User, UserLastRecord)
-from utils import load_config, log
+from utils import PostException, load_config, log
 
 from .crawler_arg import add_article_arg_parser, get_base_parser
 
@@ -132,7 +132,7 @@ class PttArticleCrawler:
             return None, None
 
         def parse_author(author):
-            logging.debug('parse_author(%s)', parse_author)
+            logging.debug('parse_author(%s)', author)
             if author:
                 match = re.search(r'([\S]*)\D\((.*)\)', author)
                 if match:
@@ -166,13 +166,17 @@ class PttArticleCrawler:
                                                  {'name': record['board']},
                                                  auto_commit=False)
 
+                try:
+                    record['date'] = datetime.strptime(record['date'], '%a %b %d %H:%M:%S %Y')                    
+                except:
+                    record['date'] = None
+
                 article, is_new_article = self.db.get_or_create(self.db_session, Article,
                                                                 {'web_id': record['article_id']},
                                                                 {'web_id': record['article_id'],
                                                                     'user_id': user.id,
                                                                     'board_id': board.id,
-                                                                    'post_datetime': datetime.strptime(record['date'],
-                                                                                                       '%a %b %d %H:%M:%S %Y'),
+                                                                    'post_datetime': record['date'],
                                                                     'post_ip': record['ip']},
                                                                 auto_commit=False)
 
@@ -277,12 +281,15 @@ class PttArticleCrawler:
         title = ''
         date = ''
         if metas:
-            author = metas[0].select('span.article-meta-value')[
-                0].string if metas[0].select('span.article-meta-value')[0] else author
-            title = metas[1].select('span.article-meta-value')[0].string if metas[1].select(
-                'span.article-meta-value')[0] else title
-            date = metas[2].select('span.article-meta-value')[0].string if metas[2].select(
-                'span.article-meta-value')[0] else date
+            author = (metas[0].select('span.article-meta-value')[0].string 
+                    if metas[0].select('span.article-meta-value')[0] 
+                    else author)
+            title = (metas[1].select('span.article-meta-value')[0].string 
+                    if metas[1].select('span.article-meta-value')[0] 
+                    else title)
+            date = (metas[2].select('span.article-meta-value')[0].string 
+                    if metas[2].select('span.article-meta-value')[0] 
+                    else date)
 
             # remove meta nodes
             for meta in metas:
@@ -303,6 +310,7 @@ class PttArticleCrawler:
                     date = date.strftime('%a %b %d %H:%M:%S %Y')
             else:
                 logging.info('Excuse me WTF!?')
+                raise PostException('此文章被編輯過，解析出現問題。')
 
         # remove and keep push nodes
         pushes = main_content.find_all('div', class_='push')
@@ -508,9 +516,9 @@ class PttArticleCrawler:
         board, _ = self.db.get_or_create(self.db_session, Board, {
                                          'name': self.board}, {'name': self.board})
 
-        exist_article_list = self.db_session \
-            .query(Article.web_id) \
-            .filter(Article.board_id == board.id).all()
+        # exist_article_list = self.db_session \
+        #     .query(Article.web_id) \
+        #     .filter(Article.board_id == board.id).all()
 
         if self.upgrade_action:
             article_index_list = self.db_session \
@@ -519,8 +527,9 @@ class PttArticleCrawler:
         else:
             article_index_list = self.db_session \
                 .query(ArticleIndex) \
-                .filter(ArticleIndex.web_id.notin_(exist_article_list)).all()
-
+                .outerjoin(Article, ArticleIndex.web_id == Article.web_id) \
+                .filter(Article.id.is_(None), ArticleIndex.board_id == board.id).all()
+                # .filter(ArticleIndex.web_id.notin_(exist_article_list)).all()
         article_list = []
         count = 0
         for article_index in article_index_list:
@@ -529,16 +538,23 @@ class PttArticleCrawler:
                                                web_id=article_index.web_id)
             logging.debug('Processing Url = %s', link)
             article_id = article_index.web_id
-            article_list.append(self.parse(link,
-                                           article_id,
-                                           self.board,
-                                           self.timeout))
-            time.sleep(self.DELAY_TIME)
-            count += 1
-            if count == 20:
-                self._output_database(article_list)
-                article_list = []
-                count = 0
+            try:
+                article_list.append(self.parse(link,
+                                            article_id,
+                                            self.board,
+                                            self.timeout))
+                count += 1
+                if count == 20:
+                    self._output_database(article_list)
+                    article_list = []
+                    count = 0
+            except Exception:
+                pass
+            finally:
+                time.sleep(self.DELAY_TIME)
+    
+        if article_list:
+            self._output_database(article_list)
 
 
 def parse_args() -> Dict[str, str]:

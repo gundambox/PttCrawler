@@ -61,19 +61,19 @@ class PttExportHelper(object):
 
         for article in article_list:
             article_row = [article.web_id,
-                           article.board.name, article.user.username]
+                           article.board.name or '', article.user.username or '']
 
             last_history = article.history[0]
-            article_row += [last_history.title, last_history.content]
+            article_row += [last_history.title or '', last_history.content or '']
 
             article_ip_asn = self.db_session.query(
                 IpAsn).filter_by(ip=article.post_ip).first()
             if article_ip_asn:
-                article_row += [article_ip_asn.ip, article_ip_asn.asn or '', str(article_ip_asn.asn_date or ''),
+                article_row += [article_ip_asn.ip or '', article_ip_asn.asn or '', str(article_ip_asn.asn_date or ''),
                                 article_ip_asn.asn_registry or '', article_ip_asn.asn_cidr or '', article_ip_asn.asn_country_code or '',
                                 article_ip_asn.asn_description or '']
             else:
-                article_row += [article.post_ip, '', '', '', '', '', '']
+                article_row += [article.post_ip or '', '', '', '', '', '', '']
 
             article_row += [str(article.post_datetime or ''),
                             str(last_history.end_at or '')]
@@ -82,17 +82,17 @@ class PttExportHelper(object):
 
             for push in last_history.push_list:
                 push_row = [article.web_id]
-                push_row += [push.user.username,
-                             push.push_tag, push.push_content]
+                push_row += [push.user.username or '',
+                             push.push_tag or '', push.push_content or '']
                 push_ip_asn = self.db_session.query(
                     IpAsn).filter_by(ip=push.push_ip).first()
                 if push_ip_asn:
-                    push_row += [push_ip_asn.ip, 
+                    push_row += [push_ip_asn.ip or '', 
                                  push_ip_asn.asn or '', push_ip_asn.asn_cidr or '',
                                  push_ip_asn.asn_country_code or '', str(push_ip_asn.asn_date or ''), 
                                  push_ip_asn.asn_description or '', push_ip_asn.asn_registry or '']
                 else:
-                    push_row += [push.push_ip, '', '', '', '', '', '']
+                    push_row += [push.push_ip or '', '', '', '', '', '', '']
 
                 if push.push_datetime is not None:
                     if isinstance(push.push_datetime, str):
@@ -111,7 +111,7 @@ class PttExportHelper(object):
                 user_last_record = user.last_record[0]
                 user_ip_asn = self.db_session.query(IpAsn).filter_by(
                     ip=user_last_record.last_login_ip).first()
-                user_row += [user.username, user.login_times or '', user.valid_article_count or '',
+                user_row += [user.username or '', user.login_times or '', user.valid_article_count or '',
                              str(user_last_record.last_login_datetime or ''), user_last_record.last_login_ip or '']
                 user_row += [user_ip_asn.asn or '', str(user_ip_asn.asn_date or ''),
                              user_ip_asn.asn_registry or '', user_ip_asn.asn_cidr or '', user_ip_asn.asn_country_code or '',
@@ -137,20 +137,20 @@ class PttExportHelper(object):
         for article in article_list:
             article_row = {
                 'Atricle.web_id': article.web_id,
-                'Article.board': article.board.name,
-                'Atricle.author': article.user.username
+                'Article.board': article.board.name or '',
+                'Atricle.author': article.user.username or ''
             }
 
             last_history = article.history[0]
-            article_row.update({'Atricle.title': last_history.title,
-                                'Atricle.cotent': last_history.content
+            article_row.update({'Atricle.title': last_history.title or '',
+                                'Atricle.cotent': last_history.content or ''
                                 })
 
             article_ip_asn = self.db_session.query(
                 IpAsn).filter_by(ip=article.post_ip).first()
             if article_ip_asn:
                 article_row.update({
-                    'Atricle.post_ip': article_ip_asn.ip,
+                    'Atricle.post_ip': article_ip_asn.ip or '',
                     'Atricle.post_ip.asn': (article_ip_asn.asn or ''),
                     'Atricle.post_ip.asn_date': str(article_ip_asn.asn_date or ''),
                     'Atricle.post_ip.asn_registry': (article_ip_asn.asn_registry or ''),
@@ -160,7 +160,7 @@ class PttExportHelper(object):
                 })
             else:
                 article_row.update({
-                    'Atricle.post_ip': article.post_ip,
+                    'Atricle.post_ip': article.post_ip or '',
                     'Atricle.post_ip.asn': '',
                     'Atricle.post_ip.asn_date': '',
                     'Atricle.post_ip.asn_registry': '',
@@ -179,16 +179,16 @@ class PttExportHelper(object):
             for push in last_history.push_list:
                 push_row = {
                     'Push.article_web_id': article.web_id,
-                    'Push.username': push.user.username,
-                    'Push.tag': push.push_tag,
-                    'Push.content': push.push_content
+                    'Push.username': push.user.username or '',
+                    'Push.tag': push.push_tag or '',
+                    'Push.content': push.push_content or ''
                 }
 
                 push_ip_asn = self.db_session.query(
                     IpAsn).filter_by(ip=push.push_ip).first()
                 if push_ip_asn:
                     push_row.update({
-                        'Push.ip': push_ip_asn.ip,
+                        'Push.ip': push_ip_asn.ip or '',
                         'Push.ip.asn': push_ip_asn.asn or '',
                         'Push.ip.asn_cidr': push_ip_asn.asn_cidr or '',
                         'Push.ip.asn_country_code': push_ip_asn.asn_country_code or '',
@@ -198,7 +198,7 @@ class PttExportHelper(object):
                     })
                 else:
                     push_row.update({
-                        'Push.ip': push.push_ip,
+                        'Push.ip': push.push_ip or '',
                         'Push.ip.asn': '',
                         'Push.ip.asn_cidr': '',
                         'Push.ip.asn_country_code': '',
@@ -226,7 +226,7 @@ class PttExportHelper(object):
                 user_ip_asn = self.db_session.query(IpAsn).filter_by(
                     ip=user_last_record.last_login_ip).first()
                 user_row.update({
-                    'User.username': user.username,
+                    'User.username': user.username or '',
                     'User.login_times': user.login_times or '',
                     'User.valid_article_count': user.valid_article_count or '',
                     'User.last_login_datetime': str(user_last_record.last_login_datetime or ''),
@@ -239,7 +239,7 @@ class PttExportHelper(object):
                     'User.last_login_ip.asn_description': user_ip_asn.asn_description or ''})
             else:
                 user_row.update({
-                    'User.username': user.username,
+                    'User.username': user.username or '',
                     'User.login_times': '',
                     'User.valid_article_count': '',
                     'User.last_login_datetime': '',
@@ -279,7 +279,7 @@ class PttExportHelper(object):
             csv_path = os.path.join(self.output_folder, '{prefix}{filename}.{file_format}'.format(prefix=self.output_prefix,
                                                                                                   filename=output_filename,
                                                                                                   file_format=self.file_format.name))
-            with open(csv_path, 'w') as csvfile:
+            with open(csv_path, 'w', encoding='utf-8') as csvfile:
                 csvwriter = csv.writer(csvfile, delimiter=',')
                 for row in rows:
                     csvwriter.writerow(row)

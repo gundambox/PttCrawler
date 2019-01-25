@@ -61,3 +61,7 @@ def load_config(config_path: str = 'config.ini') -> configparser.ConfigParser:
     config.read(config_path)
 
     return config
+
+
+class PostException(Exception):
+    pass

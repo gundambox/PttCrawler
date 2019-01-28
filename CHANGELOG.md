@@ -1,13 +1,17 @@
 # ChangeLog
 
 ## [Unrelease]
+
+## [1.0.2] 2019-01-28
 ### Added
 - start to use database migration
 - use article_index crawler to fetch the ptt article index and article web_id
 - add new argument in article crawler to fetch ptt article
 - article_history rotation
+- add pyinstaller to bundle script into executable
 ### Fixed
 - schedule.py bug
+- crawler.py bug
 
 ## [1.0.1] 2018-12-24
 ### Chanaged

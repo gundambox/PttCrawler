@@ -143,6 +143,43 @@ python schedule.py update {article, asn, user} -c CYCLE_TIME [-s START_DATETIME]
 python schedule.py remove {article, asn, user}
 ```
 
+## Bundle python scripts into executables
+
+* windows
+
+    ```bash
+    # export.exe
+    pyinstaller -F --clean \
+        -p "<python Lib路徑>;<python Lib site-packages路徑>" \
+        --hidden-import pyexcel_io.readers \
+        --hidden-import pyexcel_io.writers \
+        --hidden-import pyexcel_io.database \ 
+        --hidden-import pyexcel_ods3.odsw \
+        --hidden-import sqlalchemy.ext.baked \ 
+        export.py
+
+    # query.exe
+    pyinstaller -F --clean \
+        -p "<python Lib路徑>;<python Lib site-packages路徑>" \
+        --hidden-import pyexcel_io.readers \
+        --hidden-import pyexcel_io.writers \
+        --hidden-import pyexcel_io.database \
+        --hidden-import pyexcel_ods3.odsw \
+        --hidden-import sqlalchemy.ext.baked \
+        query.py
+
+    # schedule.exe
+    pyinstaller -F --clean 
+        -p "<python Lib路徑>;<python Lib site-packages路徑>" \
+        schedule.py
+
+    # crawler.exe
+    pyinstaller -F --clean \
+        -p "<python Lib路徑>;<python Lib site-packages路徑>" \
+        --name crawler.exe \
+        crawler\__main__.py 
+    ```
+
 ## Architecture
 
 ```
@@ -164,7 +201,8 @@ PttCrawler/
 │   └── versions/
 │       ├── 77eaebfa8062_create_initial_table.py
 │       ├── 64f93945c28a_edit_article_table.py
-│       └── 6794412e2720_edit_article_history_on_delete_actions.py
+│       ├── 6794412e2720_edit_article_history_on_delete_actions.py
+|       └── 3af39c6792c0_edit_datetime_nullable.py
 ├── doc/
 │   ├── img/
 │   ├── en.md

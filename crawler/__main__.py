@@ -4,10 +4,10 @@ from logging.handlers import RotatingFileHandler
 
 from utils import valid_date_type
 
-from . import CrawlerModule, PttArticleCrawler, PttIpAsnCrawler, PttUserCrawler, PttArticleIndexCrawler
-from .crawler_arg import (add_article_arg_parser, add_article_index_arg_parser,
-                          add_asn_arg_parser, add_user_arg_parser,
-                          get_base_parser)
+from crawler import CrawlerModule, PttArticleCrawler, PttIpAsnCrawler, PttUserCrawler, PttArticleIndexCrawler
+from crawler.crawler_arg import (add_article_arg_parser, add_article_index_arg_parser,
+                                 add_asn_arg_parser, add_user_arg_parser,
+                                 get_base_parser)
 
 
 def parse_argument():

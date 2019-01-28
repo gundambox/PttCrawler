@@ -1,9 +1,9 @@
 from enum import Enum
 
-from .article import PttArticleCrawler
-from .article_index import PttArticleIndexCrawler
-from .asn import PttIpAsnCrawler
-from .user import PttUserCrawler
+from crawler.article import PttArticleCrawler
+from crawler.article_index import PttArticleIndexCrawler
+from crawler.asn import PttIpAsnCrawler
+from crawler.user import PttUserCrawler
 
 
 class CrawlerModule(Enum):

@@ -187,26 +187,69 @@ python export.py --format {ods, csv json} --output-folder OUTPUT_FOLDER [--outpu
 
 ## 將腳本打包為執行檔
 
-* python Lib路徑解釋
-    - windows
-        例如python環境安裝在"C:\Program Files\Python37"，`<python Lib路徑>`是`C:\Program Files\Python37\Lib`，`<python Lib site-packages路徑>`是`C:\Program Files\Python37\Lib\site-packages`
+### 打包執行檔指令
 
-* 打包執行檔指令
+* windows
 
     ```bash
-    # export.exe
+    # init_db.exe
     pyinstaller -F --clean \
-        -p "<python Lib路徑>;<python Lib site-packages路徑>" \
-        --hidden-import pyexcel_io.readers \
-        --hidden-import pyexcel_io.writers \
-        --hidden-import pyexcel_io.database \ 
-        --hidden-import pyexcel_ods3.odsw \
-        --hidden-import sqlalchemy.ext.baked \ 
+        --hidden-import logging.config \
+        --hidden-import typing \
+        --hidden-import sqlalchemy.ext.declarative \
+        init_db.py
+
+    # export.exe
+    pyinstaller -F --clean ^
+        --hidden-import pyexcel_io.readers ^
+        --hidden-import pyexcel_io.writers ^
+        --hidden-import pyexcel_io.database ^ 
+        --hidden-import pyexcel_ods3.odsw ^
+        --hidden-import sqlalchemy.ext.baked ^
         export.py
 
     # query.exe
+    pyinstaller -F --clean ^
+        --hidden-import pyexcel_io.readers ^
+        --hidden-import pyexcel_io.writers ^
+        --hidden-import pyexcel_io.database ^
+        --hidden-import pyexcel_ods3.odsw ^
+        --hidden-import sqlalchemy.ext.baked ^
+        query.py
+
+    # schedule.exe
+    # `python-crontab` 在 windows 環境下無法使用
+    # Todo: 尋找其他套件替代
+    pyinstaller -F --clean 
+        schedule.py
+
+    # crawler.exe
+    pyinstaller -F --clean ^
+        --name crawler.exe ^
+        crawler\__main__.py 
+    ```
+
+* linux
+
+    ```bash
+    # init_db
     pyinstaller -F --clean \
-        -p "<python Lib路徑>;<python Lib site-packages路徑>" \
+        --hidden-import logging.config \
+        --hidden-import typing \
+        --hidden-import sqlalchemy.ext.declarative \
+        init_db.py
+
+    # export
+    pyinstaller -F --clean \
+        --hidden-import pyexcel_io.readers \
+        --hidden-import pyexcel_io.writers \
+        --hidden-import pyexcel_io.database \
+        --hidden-import pyexcel_ods3.odsw \
+        --hidden-import sqlalchemy.ext.baked \
+        export.py
+
+    # query
+    pyinstaller -F --clean \
         --hidden-import pyexcel_io.readers \
         --hidden-import pyexcel_io.writers \
         --hidden-import pyexcel_io.database \
@@ -214,16 +257,14 @@ python export.py --format {ods, csv json} --output-folder OUTPUT_FOLDER [--outpu
         --hidden-import sqlalchemy.ext.baked \
         query.py
 
-    # schedule.exe
-    pyinstaller -F --clean 
-        -p "<python Lib路徑>;<python Lib site-packages路徑>" \
+    # schedule
+    pyinstaller -F --clean \
         schedule.py
 
-    # crawler.exe
+    # crawler
     pyinstaller -F --clean \
-        -p "<python Lib路徑>;<python Lib site-packages路徑>" \
-        --name crawler.exe \
-        crawler\__main__.py 
+        --name crawler \
+        crawler/__main__.py 
     ```
 
 ## 檔案結構

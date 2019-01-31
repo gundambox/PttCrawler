@@ -145,22 +145,69 @@ python schedule.py remove {article, asn, user}
 
 ## Bundle python scripts into executables
 
+### Bundle instruction
+
 * windows
 
     ```bash
-    # export.exe
+    # init_db.exe
     pyinstaller -F --clean \
-        -p "<python Lib路徑>;<python Lib site-packages路徑>" \
-        --hidden-import pyexcel_io.readers \
-        --hidden-import pyexcel_io.writers \
-        --hidden-import pyexcel_io.database \ 
-        --hidden-import pyexcel_ods3.odsw \
-        --hidden-import sqlalchemy.ext.baked \ 
+        --hidden-import logging.config \
+        --hidden-import typing \
+        --hidden-import sqlalchemy.ext.declarative \
+        init_db.py
+
+    # export.exe
+    pyinstaller -F --clean ^
+        --hidden-import pyexcel_io.readers ^
+        --hidden-import pyexcel_io.writers ^
+        --hidden-import pyexcel_io.database ^ 
+        --hidden-import pyexcel_ods3.odsw ^
+        --hidden-import sqlalchemy.ext.baked ^
         export.py
 
     # query.exe
+    pyinstaller -F --clean ^
+        --hidden-import pyexcel_io.readers ^
+        --hidden-import pyexcel_io.writers ^
+        --hidden-import pyexcel_io.database ^
+        --hidden-import pyexcel_ods3.odsw ^
+        --hidden-import sqlalchemy.ext.baked ^
+        query.py
+
+    # schedule.exe
+    # `python-crontab` is not working on windows
+    # Todo: search other package to replace `python-crontab`
+    pyinstaller -F --clean ^
+        schedule.py
+
+    # crawler.exe
+    pyinstaller -F --clean ^
+        --name crawler.exe ^
+        crawler\__main__.py 
+    ```
+
+* linux 
+
+    ```bash
+    # init_db
     pyinstaller -F --clean \
-        -p "<python Lib路徑>;<python Lib site-packages路徑>" \
+        --hidden-import logging.config \
+        --hidden-import typing \
+        --hidden-import sqlalchemy.ext.declarative \
+        init_db.py
+
+    # export
+    pyinstaller -F --clean \
+        --hidden-import pyexcel_io.readers \
+        --hidden-import pyexcel_io.writers \
+        --hidden-import pyexcel_io.database \
+        --hidden-import pyexcel_ods3.odsw \
+        --hidden-import sqlalchemy.ext.baked \
+        export.py
+
+    # query
+    pyinstaller -F --clean \
         --hidden-import pyexcel_io.readers \
         --hidden-import pyexcel_io.writers \
         --hidden-import pyexcel_io.database \
@@ -168,17 +215,16 @@ python schedule.py remove {article, asn, user}
         --hidden-import sqlalchemy.ext.baked \
         query.py
 
-    # schedule.exe
-    pyinstaller -F --clean 
-        -p "<python Lib路徑>;<python Lib site-packages路徑>" \
+    # schedule
+    pyinstaller -F --clean \
         schedule.py
 
-    # crawler.exe
+    # crawler
     pyinstaller -F --clean \
-        -p "<python Lib路徑>;<python Lib site-packages路徑>" \
-        --name crawler.exe \
-        crawler\__main__.py 
+        --name crawler \
+        crawler/__main__.py 
     ```
+
 
 ## Architecture
 

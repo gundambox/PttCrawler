@@ -4,6 +4,8 @@ crawler/config.ini
 database/
 *.json
 .vscode/
+build/
+dist/
 *.db*
 *.ods
 *.csv
@@ -11,3 +13,4 @@ database/
 *.log*
 *.png
 *.pyc
+*.spec

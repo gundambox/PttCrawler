@@ -193,10 +193,10 @@ python export.py --format {ods, csv json} --output-folder OUTPUT_FOLDER [--outpu
 
     ```bash
     # init_db.exe
-    pyinstaller -F --clean \
-        --hidden-import logging.config \
-        --hidden-import typing \
-        --hidden-import sqlalchemy.ext.declarative \
+    pyinstaller -F --clean ^
+        --hidden-import logging.config ^
+        --hidden-import typing ^
+        --hidden-import sqlalchemy.ext.declarative ^
         init_db.py
 
     # export.exe

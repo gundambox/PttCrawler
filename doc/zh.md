@@ -92,6 +92,12 @@ VersionRotate = 30
 
 ## 使用
 
+### Inintialize Database
+
+```bash
+python init_db.py
+```
+
 ### Crawler
 
 1. PTT 文章索引爬蟲

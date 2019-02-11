@@ -91,6 +91,12 @@ Output = both
 
 ## Usage
 
+### Inintialize Database
+
+```bash
+python init_db.py
+```
+
 ### Crawler
 
 1. PTT Article index
@@ -232,6 +238,7 @@ python schedule.py remove {article, asn, user}
 PttCrawler/
 ├── CHANGELOG.md
 ├── config_example.ini
+├── init_db.py
 ├── crawler/
 │   ├── __init__.py
 │   ├── __main__.py

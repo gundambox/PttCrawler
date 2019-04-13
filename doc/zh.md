@@ -200,9 +200,11 @@ python export.py --format {ods, csv json} --output-folder OUTPUT_FOLDER [--outpu
     ```bash
     # init_db.exe
     pyinstaller -F --clean ^
+        --hidden-import models ^
         --hidden-import logging.config ^
         --hidden-import typing ^
         --hidden-import sqlalchemy.ext.declarative ^
+        --additional-hooks-dir=models ^
         init_db.py
 
     # export.exe
@@ -231,6 +233,7 @@ python export.py --format {ods, csv json} --output-folder OUTPUT_FOLDER [--outpu
 
     # crawler.exe
     pyinstaller -F --clean ^
+        --hidden-import sqlalchemy.ext.baked ^
         --name crawler.exe ^
         crawler\__main__.py 
     ```
@@ -240,9 +243,11 @@ python export.py --format {ods, csv json} --output-folder OUTPUT_FOLDER [--outpu
     ```bash
     # init_db
     pyinstaller -F --clean \
+        --hidden-import models \
         --hidden-import logging.config \
         --hidden-import typing \
         --hidden-import sqlalchemy.ext.declarative \
+        --additional-hooks-dir=models \
         init_db.py
 
     # export
@@ -269,6 +274,7 @@ python export.py --format {ods, csv json} --output-folder OUTPUT_FOLDER [--outpu
 
     # crawler
     pyinstaller -F --clean \
+        --hidden-import sqlalchemy.ext.baked \
         --name crawler \
         crawler/__main__.py 
     ```

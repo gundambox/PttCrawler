@@ -189,6 +189,7 @@ python schedule.py remove {article, asn, user}
 
     # crawler.exe
     pyinstaller -F --clean ^
+        --hidden-import sqlalchemy.ext.baked ^
         --name crawler.exe ^
         crawler\__main__.py 
     ```
@@ -227,6 +228,7 @@ python schedule.py remove {article, asn, user}
 
     # crawler
     pyinstaller -F --clean \
+        --hidden-import sqlalchemy.ext.baked \
         --name crawler \
         crawler/__main__.py 
     ```
